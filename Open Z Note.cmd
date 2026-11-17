@@ -18,6 +18,9 @@ for %%B in (
 ) do if not defined BROWSER if exist %%B set "BROWSER=%%~B"
 setlocal EnableDelayedExpansion
 set "URL=!PAGE:\=/!"
+rem Encode URL delimiters before spaces so portable folders with # or %% work.
+set "URL=!URL:%%=%%25!"
+set "URL=!URL:#=%%23!"
 set "URL=!URL: =%%20!"
 if defined ZNOTE_DRYRUN (
   echo "!BROWSER!" --app="file:///!URL!"

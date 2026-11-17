@@ -1,0 +1,61 @@
+Z NOTE - PORTABLE BROWSER APP
+
+GET STARTED
+1. Extract the ZIP completely. Keep the whole "Z Note" folder together.
+   Do not run the app from inside the ZIP preview.
+2. On Windows, double-click "Open Z Note.cmd". It opens Z Note in Chrome
+   or Edge in its own window. You can also open "Z Note.html" directly
+   in a desktop browser. No installer or account is needed.
+3. In the first-run setup dialog, click "Choose source folder".
+4. Select the extracted "Z Note" folder (the folder containing this file),
+   or another location where you want to keep your notebook.
+5. Allow the browser to access that folder. Z Note creates a new
+   "Z Note notebook" folder inside it for your pages and pictures.
+
+The app files work offline after extraction. Keep the app subfolder beside
+Z Note.html. Screen capture and folder access still depend on your browser
+and its permissions. Desktop Chrome or Edge is recommended for folder access.
+
+YOUR NOTES AND BACKUPS
+Your notes are stored in this browser on this device. Choosing a source folder
+also keeps a file copy in "Z Note notebook". Your private notes are not included
+in the public download and are not sent to the Z Note GitHub repository.
+
+If you already have a "Z Note notebook" folder, choose the folder CONTAINING
+it, not "Z Note notebook" itself. Z Note will reconnect to that notebook.
+When both places hold notes, follow the app's choices to combine or use the
+folder's notebook.
+
+If the browser asks again after reopening, click "Allow" in Z Note to resume
+folder access. You can manage the folder and download or restore a backup in:
+    Style & data > Sync & backup
+
+"Use browser storage" lets you start without a folder. Browser storage does
+not travel with the app folder, and clearing site data can erase it. Download
+backups regularly. If storage is blocked, the app offers a temporary session;
+download a backup before closing it.
+
+MOVING TO ANOTHER COMPUTER
+Keep a backup before moving or updating. Copy both the app folder and your
+"Z Note notebook" folder to the new computer, then choose its containing
+folder during setup. Alternatively, download a backup on the old computer
+and restore it through Style & data > Sync & backup on the new computer.
+
+You may choose a folder managed by OneDrive or another desktop sync service
+to share a notebook between your own computers. That service must finish
+syncing between edits. Concurrent changes to the same page can overwrite
+each other: the newer change wins.
+
+SHARING AND UPDATING
+Share the original "Z-Note-Portable.zip" download with other people. Each
+person creates their own notebook. Do not share your working folder or your
+"Z Note notebook" folder unless you intend to share its private contents.
+
+Before updating the app, save a backup. Replace only the app files; keep your
+"Z Note notebook" folder. If you use a new app location or another browser,
+reconnect to your notebook folder or restore your backup.
+
+KEEP AWAKE
+Click "Keep Awake" beside "Snip" to keep the screen on while Z Note is visible.
+It pauses when Z Note is hidden and resumes when you return. Click it again
+to stop. It starts off each time you reopen the app.

@@ -3,6 +3,7 @@ Z Note notebook/
 **/Z Note notebook/
 Z Note backup*.json
 *.zip
+!downloads/Z-Note-Portable.zip
 *.log
 .env
 .env.*

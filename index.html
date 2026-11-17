@@ -3,16 +3,99 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Z Note — notes, tasks and boards in your browser, with your own local notebook folder.">
-  <title>Z Note</title>
+  <meta name="description" content="Download Z Note, extract the folder on your PC, and open your personal notebook in your own browser. No installation required.">
+  <title>Download Z Note for your PC</title>
   <link rel="icon" href="app/img/icon.png">
-  <script>
-    // Keep one application entry point for the hosted and portable versions.
-    location.replace('./Z%20Note.html' + location.search + location.hash);
-  </script>
+  <link rel="stylesheet" href="app/css/theme.css">
+  <style>
+    html { height: auto; }
+    body { height: auto; min-height: 100vh; overflow: auto; background: #eee8d8; }
+    .wrap { max-width: 1100px; margin: auto; padding: 28px 36px 32px; }
+    .site-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 10px; font: 28px var(--font-hand); color: var(--ink); }
+    .brand img { width: 40px; height: 40px; }
+    .source-link { font: 500 13px var(--font-sans); color: var(--ink-2); }
+    .hero { display: grid; grid-template-columns: 1.15fr 1fr; align-items: center; gap: 64px; margin: 64px 0 50px; }
+    .eyebrow { display: inline-block; font: 600 11px var(--font-sans); letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); margin-bottom: 20px; }
+    h1 { font: 400 clamp(40px, 5vw, 60px)/1.15 var(--font-hand); letter-spacing: -1.3px; margin: 0 0 22px; }
+    h1 span { background: linear-gradient(transparent 64%, var(--hl) 64%, var(--hl) 92%, transparent 92%); }
+    .lead { max-width: 420px; font: 18px/1.65 var(--font-serif); color: var(--ink-2); margin: 0 0 28px; }
+    .download { display: inline-flex; gap: 12px; align-items: center; padding: 16px 23px; font: 600 15px var(--font-sans); color: var(--paper); background: var(--accent); border: 1.5px solid var(--accent); border-radius: var(--sketch-r); text-decoration: none; box-shadow: 3px 4px 0 #c5bea9; }
+    .download:hover { transform: translateY(-2px); box-shadow: 3px 6px 0 #c5bea9; }
+    a:focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; }
+    .download svg { flex: none; }
+    .download-note { margin-top: 12px; font: 12px/1.6 var(--font-sans); color: var(--ink-2); }
+    .folder-card { position: relative; background: var(--paper); border: 1.5px solid var(--rule-2); border-radius: 4px 7px 3px 8px; box-shadow: 7px 9px 0 #d8d0bb; transform: rotate(1deg); }
+    .folder-card::before { content: ''; width: 92px; height: 23px; background: #ffe372c9; position: absolute; top: -12px; left: calc(50% - 46px); transform: rotate(-5deg); }
+    .folder-head { padding: 28px 28px 18px; border-bottom: 1px dashed var(--rule-2); }
+    .folder-head small { display: block; font: 12px var(--font-sans); color: var(--ink-2); margin-bottom: 10px; }
+    .folder-head h2 { font: 29px var(--font-hand); color: var(--accent); }
+    .files { list-style: none; padding: 18px 20px 22px; margin: 0; font: 13px var(--font-sans); }
+    .files li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 8px; }
+    .files li:first-child { background: #fff0a9; border-radius: 4px; }
+    .file-mark { color: var(--accent); font-size: 18px; width: 19px; text-align: center; }
+    .file-hint { margin-left: auto; font: 14px var(--font-hand); color: var(--ink-2); }
+    .features { color: var(--ink-2); font: 13px/1.6 var(--font-sans); margin: 22px 0 0; }
+    .steps { border-top: 1.5px dashed var(--rule-2); padding-top: 28px; }
+    .steps h2 { font: 28px var(--font-hand); margin: 0 0 22px; }
+    .steps ol { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; list-style: none; margin: 0; padding: 0; counter-reset: step; }
+    .steps li { counter-increment: step; }
+    .step-title { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; font: 600 15px var(--font-sans); }
+    .step-title::before { content: counter(step); width: 27px; height: 27px; display: grid; place-items: center; background: var(--paper); border: 1px solid var(--rule-2); border-radius: 50%; color: var(--accent); font: 20px var(--font-hand); }
+    .steps p { color: var(--ink-2); font: 14px/1.7 var(--font-sans); }
+    .storage-note { margin-top: 28px; padding: 16px 19px; background: #f9f5e8; border-left: 3px solid var(--accent); color: var(--ink-2); font: 13px/1.7 var(--font-sans); }
+    footer { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-top: 30px; color: var(--ink-2); font: 12px var(--font-sans); }
+    @media (max-width: 760px) {
+      .wrap { padding: 22px 24px; }
+      .hero { grid-template-columns: 1fr; gap: 38px; margin: 40px 0; }
+      .lead { max-width: none; }
+      .folder-card { transform: none; max-width: 480px; }
+      .steps ol { grid-template-columns: 1fr; gap: 24px; }
+      .download { padding: 15px 18px; }
+      .file-hint { font-size: 13px; }
+    }
+  </style>
 </head>
 <body>
-  <p><a href="Z%20Note.html">Open Z Note</a></p>
-  <noscript>Z Note needs JavaScript enabled to open your notebook.</noscript>
+  <div class="wrap">
+    <header class="site-header">
+      <div class="brand"><img src="app/img/icon.png" alt="" width="40" height="40">Z Note</div>
+      <a class="source-link" href="https://github.com/ZweWH/z-note">View on GitHub ↗</a>
+    </header>
+    <main>
+      <section class="hero" aria-labelledby="download-title">
+        <div>
+          <p class="eyebrow">A portable notebook for your PC</p>
+          <h1 id="download-title">Your notes,<br><span>at home on your PC.</span></h1>
+          <p class="lead">Download the Z Note folder, save it on your computer, and open it in your own browser. Ready whenever an idea arrives.</p>
+          <a class="download" href="downloads/Z-Note-Portable.zip" download="Z-Note-Portable.zip">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 17v4h14v-4"/></svg>
+            Download Z Note · ZIP
+          </a>
+          <p class="download-note">No installation or account needed. Works offline after extraction.<br>Use desktop Chrome or Edge for folder saving.</p>
+          <p class="features">Notes · Tasks · Boards · Snips · Keep Awake</p>
+        </div>
+        <aside class="folder-card" aria-label="Contents of the portable Z Note folder">
+          <div class="folder-head"><small>Inside your download</small><h2>Z Note /</h2></div>
+          <ul class="files">
+            <li><span class="file-mark" aria-hidden="true">▤</span><strong>Z Note.html</strong><span class="file-hint">← open in your browser</span></li>
+            <li><span class="file-mark" aria-hidden="true">↗</span><span>Open Z Note.cmd</span><span class="file-hint">Windows shortcut</span></li>
+            <li><span class="file-mark" aria-hidden="true">▱</span><span>app /</span><span class="file-hint">keep this folder beside it</span></li>
+            <li><span class="file-mark" aria-hidden="true">≡</span><span>START HERE.txt</span><span class="file-hint">a quick guide</span></li>
+          </ul>
+        </aside>
+      </section>
+      <section class="steps" aria-labelledby="steps-title">
+        <h2 id="steps-title">Three steps, then make it yours.</h2>
+        <ol>
+          <li><h3 class="step-title">Download &amp; extract</h3><p>Save the ZIP, then choose <strong>Extract All</strong>. Move the extracted <strong>Z Note</strong> folder anywhere you want to keep it.</p></li>
+          <li><h3 class="step-title">Open in your browser</h3><p>Open <strong>Z Note.html</strong> with Chrome or Edge. On Windows, <strong>Open Z Note.cmd</strong> also opens it in a dedicated window.</p></li>
+          <li><h3 class="step-title">Choose your source folder</h3><p>In the first-run dialog, choose the extracted <strong>Z Note</strong> folder. The app creates <strong>Z Note notebook</strong> inside it for your pages and pictures.</p></li>
+        </ol>
+        <p class="storage-note"><strong>Your notebook stays with you.</strong> Each person creates their own notes on their own PC. Folder access needs your browser’s permission. If you choose browser storage instead, download backups regularly from <strong>Style &amp; data → Sync &amp; backup</strong>.</p>
+      </section>
+    </main>
+    <footer><span>Keep the whole Z Note folder together.</span><a href="https://github.com/ZweWH/z-note">Source code &amp; documentation</a></footer>
+  </div>
 </body>
 </html>
