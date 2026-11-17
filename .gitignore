@@ -1,0 +1,16 @@
+# Personal notebooks and backups must never be published.
+Z Note notebook/
+**/Z Note notebook/
+Z Note backup*.json
+*.zip
+*.log
+.env
+.env.*
+.claude/
+.codex/
+.agents/
+.public-release/
+node_modules/
+test-results/
+playwright-report/
+*.tmp

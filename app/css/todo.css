@@ -1,0 +1,94 @@
+/* Z Note · to-do lists and the Tasks view */
+
+.todo-add {
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 12px; min-height: 46px;
+  background-color: var(--paper); border: 1.5px solid var(--ink); border-radius: var(--sketch-r);
+  box-shadow: 3px 4px 0 -1px color-mix(in srgb, var(--ink) 16%, transparent);
+}
+.todo-plus { color: var(--accent); display: grid; }
+.todo-input {
+  flex: 1; min-width: 0; border: 0; background: transparent; outline: none;
+  font: 400 var(--fs) / var(--lh) var(--font-body); color: var(--ink);
+}
+.todo-input::placeholder { color: var(--ink-3); font-family: var(--font-hand); font-size: 1.1em; }
+.todo-hint { font-size: 12.5px; color: var(--ink-3); margin: 9px 4px 0; }
+.todo-hint kbd { font-size: 11px; }
+
+.todo-progress { display: flex; align-items: center; gap: 12px; margin: 18px 2px 10px; min-height: 18px; }
+.todo-meter {
+  flex: 1; height: 9px; border: 1.5px solid var(--ink-2); padding: 1px;
+  border-radius: 9px 14px 10px 15px / 14px 9px 15px 10px; overflow: hidden;
+}
+.todo-meter span { display: block; height: 100%; background: var(--accent); border-radius: 6px 9px 7px 10px; transition: width .35s ease; }
+.todo-count { font: 400 16px/1 var(--font-hand); color: var(--ink-2); white-space: nowrap; }
+
+.tasks { font: 400 var(--fs) / var(--lh) var(--font-body); }
+.task {
+  position: relative; display: flex; align-items: flex-start; gap: 10px;
+  padding: calc(var(--lh) / 4) 2px; min-height: calc(var(--lh) * 1.5);
+  border-bottom: 1px dashed var(--rule);
+}
+.tasks > .task:last-child { border-bottom-color: transparent; }
+.task > .chk { margin-top: calc((var(--lh) - 19px) / 2); }
+.task-grip {
+  position: absolute; left: -30px; top: calc(var(--lh) / 4); width: 24px; height: var(--lh); padding: 0;
+  border: 0; background: transparent; color: var(--ink-3); border-radius: 6px;
+  display: grid; place-items: center; cursor: grab; opacity: 0; transition: opacity .1s ease;
+}
+.task:hover > .task-grip { opacity: 1; }
+.task-grip:hover { background: var(--paper-3); color: var(--ink); }
+.tasks-done .task-grip { display: none; }
+.task-main { flex: 1; min-width: 0; }
+.task-text { min-height: var(--lh); outline: none; overflow-wrap: anywhere; white-space: pre-wrap; caret-color: var(--accent); cursor: text; }
+.task-text:empty::before { content: attr(data-ph); color: var(--ink-3); }
+.task.done .task-text { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.task.pri:not(.done) .task-text { font-weight: 600; }
+.task-note {
+  font: 400 calc(var(--fs) * .86) / 1.5 var(--font-body); color: var(--ink-2); outline: none;
+  padding: 1px 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text;
+}
+.task-note:empty::before { content: attr(data-ph); color: var(--ink-3); }
+.task-side { display: flex; align-items: center; gap: 3px; flex: none; height: var(--lh); }
+.task-quiet { opacity: 0; transition: opacity .1s ease; }
+.task:hover .task-quiet, .task:focus-within .task-quiet { opacity: 1; }
+.ibtn.flag.on { background: transparent; color: var(--red); }
+.ibtn.flag.on svg { fill: currentColor; fill-opacity: .3; }
+.task.dragging { opacity: .35; }
+
+.done-head {
+  display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 22px; padding: 6px 2px;
+  border: 0; border-top: 1.5px dashed var(--rule-2); background: transparent; text-align: left; color: var(--ink-3);
+}
+.done-head .twisty { pointer-events: none; }
+.done-head .section-label { flex: 1; }
+.done-clear { font-size: 12.5px; color: var(--ink-3); padding: 3px 8px; border-radius: 6px; }
+.done-clear:hover { color: var(--red); background: var(--paper-3); }
+
+/* ---------- to-dos shown outside their list (Home, Tasks) ---------- */
+.task-row { gap: 10px; min-height: 38px; padding: 6px 6px; }
+.listing .task-row { border-bottom: 1px dashed var(--rule); border-radius: 0; }
+.task-open {
+  flex: 1; min-width: 0; display: flex; border: 0; background: transparent; padding: 2px 4px; text-align: left;
+  color: var(--ink); border-radius: 6px;
+}
+.task-open:hover { background: var(--paper-3); }
+.task-row.done .prow-title { color: var(--ink-3); text-decoration: line-through; }
+.task-flag { color: var(--red); flex: none; display: grid; }
+.task-flag svg { fill: currentColor; fill-opacity: .3; }
+
+.tasks-view .todo-add { margin-bottom: 22px; }
+.tab-n {
+  font: 600 11px/1 var(--font-sans); -webkit-text-stroke: 0; color: var(--ink-3); margin-left: 6px;
+  padding: 2px 6px; border: 1px solid var(--rule-2); border-radius: 8px; vertical-align: 3px;
+}
+.tab.on .tab-n { color: var(--ink); border-color: var(--ink-2); }
+.task-group { display: flex; align-items: center; gap: 8px; margin: 20px 2px 4px; }
+.task-group:first-child { margin-top: 2px; }
+.task-group.late .section-label { color: var(--red); }
+.task-group-n { font-size: 11.5px; color: var(--ink-3); }
+.task-group-link {
+  display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; padding: 3px 7px; margin-left: -7px;
+  border-radius: 7px; color: var(--ink-2);
+}
+.task-group-link:hover { background: var(--paper-3); color: var(--ink); }
+.task-group-link .section-label { color: inherit; }

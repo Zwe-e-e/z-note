@@ -1,0 +1,294 @@
+/* ==========================================================
+   Z Note · paper & ink
+   Design tokens, paper themes, and the small shared pieces
+   (buttons, inputs, chips) every screen is built from.
+   ========================================================== */
+
+:root {
+  /* type */
+  --font-hand: "Ink Free", "Segoe Print", "Bradley Hand ITC", cursive;
+  --font-marker: "Segoe Print", "Ink Free", cursive;
+  --font-serif: "Sitka Text", Cambria, Georgia, "Myanmar Text", serif;
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, "Myanmar Text", sans-serif;
+  --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
+  --font-head: var(--font-hand);
+  --font-body: var(--font-serif);
+  --head-stroke: .35px;
+  --head-scale: 1.1;
+  --fs: 16.5px;
+  --lh: 28px;
+  --sheet-w: 860px;
+
+  /* paper: cream (default) */
+  --desk: #E7DFCC;
+  --paper: #FCF8EC;
+  --paper-2: #F4EDDB;
+  --paper-3: #EBE2CC;
+  --ink: #2A2823;
+  --ink-2: #5F584B;
+  --ink-3: #9B9280;
+  --rule: #DDD3BC;
+  --rule-2: #C4B89D;
+  --dot: #CFC4A9;
+  --margin-line: rgba(184, 67, 45, .32);
+
+  /* ink colours */
+  --accent-l: #2E4A8C;
+  --accent-d: #9DB7FF;
+  --accent: var(--accent-l);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --on-accent: var(--paper);
+  --blue: #2E4A8C;
+  --red: #B8432D;
+  --green: #2F7350;
+  --amber: #B5760F;
+  --violet: #62479A;
+  --teal: #25747B;
+
+  /* highlighter */
+  --hl: #FFE372;
+  --hl-pink: #FFC7D3;
+  --hl-green: #CBEDB4;
+  --hl-blue: #C2E2FF;
+
+  /* sticky notes (their ink stays dark on every paper) */
+  --st-yellow: #FFE98F;
+  --st-pink: #FFCBD6;
+  --st-blue: #C3E0F7;
+  --st-green: #CDEABB;
+  --st-orange: #FFD5A6;
+  --st-purple: #DFCFF5;
+  --st-paper: #FFFDF6;
+  --st-grey: #E5E0D4;
+  --st-ink: #2A2823;
+
+  --shadow-1: 0 1px 2px rgba(70, 52, 20, .12);
+  --shadow-2: 0 1px 2px rgba(70, 52, 20, .10), 0 6px 18px -6px rgba(70, 52, 20, .24);
+  --shadow-3: 0 2px 4px rgba(70, 52, 20, .12), 0 20px 44px -14px rgba(70, 52, 20, .40);
+  --sketch-r: 255px 18px 225px 18px / 18px 225px 18px 255px;
+  --sketch-r2: 18px 225px 18px 255px / 255px 18px 225px 18px;
+
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .25 0 0 0 0 .12 0 0 0 .11 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  --pattern: none;
+  --pattern-size: auto;
+  --pattern-pos: 0 0;
+  color-scheme: light;
+}
+
+/* ---------- paper themes ---------- */
+html[data-paper="white"] {
+  --desk: #ECEBE7; --paper: #FFFFFF; --paper-2: #F6F5F1; --paper-3: #ECEAE4;
+  --ink: #24231F; --ink-2: #5B5850; --ink-3: #9A968C;
+  --rule: #E3E0D8; --rule-2: #C9C5BA; --dot: #D3D0C7;
+}
+html[data-paper="kraft"] {
+  --desk: #C6AB7F; --paper: #EAD7B2; --paper-2: #DFC99F; --paper-3: #D3BC8E;
+  --ink: #2B2115; --ink-2: #594932; --ink-3: #8A785A;
+  --rule: #CFB789; --rule-2: #B19868; --dot: #BEA574;
+  --hl: #FFD94F;
+}
+html[data-paper="night"] {
+  --desk: #141311; --paper: #211F1C; --paper-2: #1A1917; --paper-3: #2E2B26;
+  --ink: #ECE5D4; --ink-2: #B9B09D; --ink-3: #7F7868;
+  --rule: #38352E; --rule-2: #4C483F; --dot: #403C35;
+  --margin-line: rgba(255, 148, 130, .28);
+  --accent: var(--accent-d);
+  --blue: #9DB7FF; --red: #FF9482; --green: #8FD3A8; --amber: #F0B95A; --violet: #C3A8FF; --teal: #7FD1D8;
+  --hl: rgba(240, 190, 80, .34); --hl-pink: rgba(255, 140, 170, .30); --hl-green: rgba(140, 220, 130, .26); --hl-blue: rgba(120, 180, 255, .30);
+  --st-yellow: #E8D06C; --st-pink: #E9A9B8; --st-blue: #A4C6E2; --st-green: #AFD19A; --st-orange: #E9B982; --st-purple: #C4B0E0; --st-paper: #E9E4D6; --st-grey: #BDB8AC;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .5);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, .5), 0 8px 22px -6px rgba(0, 0, 0, .6);
+  --shadow-3: 0 2px 4px rgba(0, 0, 0, .5), 0 22px 48px -14px rgba(0, 0, 0, .8);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .95 0 0 0 0 .9 0 0 0 0 .78 0 0 0 .055 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  color-scheme: dark;
+}
+
+/* ---------- ink (accent) ---------- */
+html[data-ink="blue"]   { --accent-l: #2E4A8C; --accent-d: #9DB7FF; }
+html[data-ink="black"]  { --accent-l: #2A2823; --accent-d: #ECE5D4; }
+html[data-ink="red"]    { --accent-l: #AE3B26; --accent-d: #FF9482; }
+html[data-ink="green"]  { --accent-l: #2B6B49; --accent-d: #8FD3A8; }
+html[data-ink="violet"] { --accent-l: #5B418F; --accent-d: #C3A8FF; }
+html[data-ink="teal"]   { --accent-l: #1F6A71; --accent-d: #7FD1D8; }
+
+/* ---------- lettering ---------- */
+html[data-head="hand"]   { --font-head: var(--font-hand); --head-stroke: .35px; --head-scale: 1.1; }
+html[data-head="marker"] { --font-head: var(--font-marker); --head-stroke: 0px; --head-scale: .96; }
+html[data-head="serif"]  { --font-head: "Sitka Heading", "Sitka Text", Cambria, Georgia, serif; --head-stroke: 0px; --head-scale: 1; --head-weight: 700; }
+html[data-head="sans"]   { --font-head: "Segoe UI Variable Display", "Segoe UI", sans-serif; --head-stroke: 0px; --head-scale: .96; --head-weight: 650; }
+html[data-body="serif"]  { --font-body: var(--font-serif); }
+html[data-body="sans"]   { --font-body: var(--font-sans); }
+html[data-body="mono"]   { --font-body: var(--font-mono); }
+html[data-body="hand"]   { --font-body: var(--font-hand); }
+html[data-size="s"] { --fs: 15px; --lh: 26px; }
+html[data-size="m"] { --fs: 16.5px; --lh: 28px; }
+html[data-size="l"] { --fs: 18.5px; --lh: 32px; }
+html[data-body="hand"][data-size="s"] { --fs: 17px; }
+html[data-body="hand"][data-size="m"] { --fs: 19px; }
+html[data-body="hand"][data-size="l"] { --fs: 21.5px; }
+html[data-width="narrow"] { --sheet-w: 720px; }
+html[data-width="normal"] { --sheet-w: 860px; }
+html[data-width="wide"]   { --sheet-w: 1120px; }
+
+/* ---------- page patterns (pages only; --pat-y lines the pattern up with the first line of writing) ---------- */
+html[data-pattern="dots"] .sheet.page {
+  --pattern: radial-gradient(circle at 1.5px 1.5px, var(--dot) 1.1px, transparent 1.6px);
+  --pattern-size: var(--lh) var(--lh);
+  --pattern-pos: 4px calc(var(--pat-y, 0px) - 6px);
+}
+html[data-pattern="lines"] .sheet.page {
+  --pattern: linear-gradient(to bottom, transparent calc(100% - 1px), var(--rule) calc(100% - 1px)),
+             linear-gradient(to right, transparent 61px, var(--margin-line) 61px, var(--margin-line) 62.5px, transparent 62.5px);
+  --pattern-size: 100% var(--lh), 100% 100%;
+  --pattern-pos: 0 calc(var(--pat-y, 0px) - 4px), 0 0;
+}
+html[data-pattern="grid"] .sheet.page {
+  --pattern: linear-gradient(to right, var(--rule) 1px, transparent 1px),
+             linear-gradient(to bottom, var(--rule) 1px, transparent 1px);
+  --pattern-size: var(--lh) var(--lh);
+  --pattern-pos: 6px calc(var(--pat-y, 0px) - 4px);
+}
+
+/* ---------- base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font: 400 14px/1.45 var(--font-sans);
+  color: var(--ink);
+  background-color: var(--desk);
+  background-image: var(--grain);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--accent); text-underline-offset: 3px; }
+h1, h2, h3, p { margin: 0; }
+::selection { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+[contenteditable]:focus, [contenteditable]:focus-visible { outline: none; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-thumb { background: var(--rule-2); border: 3.5px solid transparent; background-clip: content-box; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--ink-3); }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+.ic { flex: none; display: block; }
+.emoji { font-family: "Segoe UI Emoji", sans-serif; line-height: 1; display: inline-block; }
+.hand { font-family: var(--font-hand); }
+.muted { color: var(--ink-3); }
+[hidden] { display: none !important; }
+
+/* a sheet of paper */
+.sheet {
+  position: relative;
+  z-index: 0;
+  background-color: var(--paper);
+  background-image: var(--pattern);
+  background-size: var(--pattern-size);
+  background-position: var(--pattern-pos);
+  border-radius: 3px;
+  box-shadow: var(--shadow-2);
+}
+.sheet::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  background-image: var(--grain); pointer-events: none;
+}
+
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  font: 600 13px/1 var(--font-sans); letter-spacing: .1px;
+  color: var(--ink); background: transparent;
+  border: 1.5px solid var(--ink); border-radius: var(--sketch-r);
+  padding: 8px 15px; min-height: 34px; white-space: nowrap;
+  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+.btn:hover { background: var(--paper-3); transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--ink); }
+.btn:active { transform: none; box-shadow: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { background: var(--accent); box-shadow: 2px 2px 0 var(--ink); }
+.btn.quiet { border-color: transparent; color: var(--ink-2); font-weight: 500; }
+.btn.quiet:hover { box-shadow: none; transform: none; color: var(--ink); }
+.btn.danger { border-color: var(--red); color: var(--red); }
+.btn.danger:hover { box-shadow: 2px 2px 0 var(--red); }
+.btn.sm { min-height: 28px; padding: 5px 11px; font-size: 12.5px; }
+.btn:disabled { opacity: .45; pointer-events: none; }
+
+.ibtn {
+  width: 30px; height: 30px; flex: none;
+  display: inline-grid; place-items: center;
+  border: 0; background: transparent; color: var(--ink-2);
+  border-radius: 9px 7px 9px 6px / 7px 9px 6px 9px;
+  transition: background-color .1s ease, color .1s ease;
+}
+.ibtn:hover { background: var(--paper-3); color: var(--ink); }
+.ibtn.on { background: var(--hl); color: var(--st-ink); }
+html[data-paper="night"] .ibtn.on { color: var(--ink); }
+.ibtn.sm { width: 24px; height: 24px; border-radius: 7px; }
+.ibtn:disabled { opacity: .35; pointer-events: none; }
+
+/* ---------- inputs ---------- */
+.input, .select {
+  width: 100%; padding: 8px 11px; min-height: 34px;
+  background: var(--paper); color: var(--ink);
+  border: 1.5px solid var(--rule-2); border-radius: 9px 7px 9px 6px / 7px 9px 6px 9px;
+  transition: border-color .12s ease;
+}
+.input:focus, .select:focus { outline: none; border-color: var(--accent); }
+.input::placeholder { color: var(--ink-3); }
+
+kbd {
+  font: 500 11px/1 var(--font-sans); color: var(--ink-3);
+  border: 1px solid var(--rule-2); border-bottom-width: 2px; border-radius: 5px;
+  padding: 2px 5px; background: var(--paper); white-space: nowrap;
+}
+
+/* hand-drawn checkbox */
+.chk {
+  width: 19px; height: 19px; flex: none; padding: 0; position: relative;
+  border: 1.6px solid var(--ink-2); background: var(--paper);
+  border-radius: 5px 4px 6px 3px / 4px 6px 3px 5px;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.chk:hover { border-color: var(--accent); background: var(--accent-soft); }
+.chk svg { position: absolute; left: -2px; top: -7px; width: 27px; height: 27px; overflow: visible; pointer-events: none; }
+.chk svg path {
+  fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 34; stroke-dashoffset: 34; transition: stroke-dashoffset .22s ease-out;
+}
+.chk.on { border-color: var(--ink-3); }
+.chk.on svg path { stroke-dashoffset: 0; }
+
+/* little paper labels */
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: 500 12px/1 var(--font-sans); color: var(--ink-2);
+  padding: 4px 9px; border: 1px solid var(--rule-2); background: var(--paper);
+  border-radius: 10px 8px 11px 7px / 8px 11px 7px 10px; white-space: nowrap;
+}
+button.chip:hover { border-color: var(--ink-2); color: var(--ink); }
+.chip.overdue { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, transparent); }
+.chip.today { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.chip.ghost { border-style: dashed; color: var(--ink-3); background: transparent; }
+
+.section-label {
+  font: 400 15.5px/1 var(--font-hand); color: var(--ink-3); letter-spacing: .4px;
+  -webkit-text-stroke: .2px currentColor;
+}
+
+/* highlighter stroke used for "you are here" marks */
+.marked {
+  background: linear-gradient(100deg, transparent 0.5%, var(--hl) 2.6%, var(--hl) 96.5%, transparent 99.5%);
+  border-radius: 7px 14px 9px 16px / 12px 8px 14px 7px;
+}
+
+.empty {
+  text-align: center; color: var(--ink-3); padding: 34px 16px;
+  font: 400 19px/1.4 var(--font-hand);
+}
+.empty small { display: block; font: 400 13px/1.5 var(--font-sans); margin-top: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
+}
