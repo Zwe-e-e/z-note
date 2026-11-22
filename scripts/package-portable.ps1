@@ -25,6 +25,7 @@ $outputPath = Join-Path $outputDirectory 'Z-Note-Portable.zip'
     'app/css/todo.css'
     'app/img/icon.ico'
     'app/img/icon.png'
+    'app/js/awake-native.js'
     'app/js/awake.js'
     'app/js/board.js'
     'app/js/db.js'
@@ -43,6 +44,7 @@ $outputPath = Join-Path $outputDirectory 'Z-Note-Portable.zip'
     'app/js/todo.js'
     'app/js/ui.js'
     'app/js/util.js'
+    'app/native/ZNoteHost.exe'
 )
 [Array]::Sort($files, [StringComparer]::Ordinal)
 $allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)

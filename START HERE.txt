@@ -4,8 +4,9 @@ GET STARTED
 1. Extract the ZIP completely. Keep the whole "Z Note" folder together.
    Do not run the app from inside the ZIP preview.
 2. On Windows, double-click "Open Z Note.cmd". It opens Z Note in Chrome
-   or Edge in its own window. You can also open "Z Note.html" directly
-   in a desktop browser. No installer or account is needed.
+   or Edge in its own window, with background Keep Awake support.
+   You can also open "Z Note.html" directly in a desktop browser, with
+   visible-window Keep Awake only. No installer or account is needed.
 3. In the first-run setup dialog, click "Choose source folder".
 4. Select the extracted "Z Note" folder (the folder containing this file),
    or another location where you want to keep your notebook.
@@ -56,6 +57,17 @@ Before updating the app, save a backup. Replace only the app files; keep your
 reconnect to your notebook folder or restore your backup.
 
 KEEP AWAKE
-Click "Keep Awake" beside "Snip" to keep the screen on while Z Note is visible.
-It pauses when Z Note is hidden and resumes when you return. Click it again
-to stop. It starts off each time you reopen the app.
+On Windows, open "Open Z Note.cmd", then click "Keep Awake" beside "Snip".
+"Awake on" keeps the display and computer awake even when Z Note is minimized
+or covered by another app. Click it again to stop. Closing or reloading the
+Z Note window releases it; it starts off each time you reopen the app.
+Manual sleep, locking, lid-close actions and Windows policy still apply.
+
+The launcher uses app/native/ZNoteHost.exe, a small Windows helper included
+in the download. It uses the .NET Framework included with Windows 10/11.
+Keep the entire app folder together. It does not change your power settings.
+
+If you open the HTML directly or use the hosted website, the button shows
+"Awake: visible" and pauses when hidden. Download the latest ZIP and open
+"Open Z Note.cmd" to use background Keep Awake. If the helper disconnects,
+reopen using the launcher.

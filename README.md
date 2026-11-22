@@ -8,15 +8,15 @@ A portable notebook you download to your PC and open in your own browser. Notes,
 
 1. Download **Z-Note-Portable.zip** and choose **Extract All**. Do not run the app from inside the ZIP.
 2. Save the extracted **Z Note** folder wherever you want on your PC.
-3. Open **Z Note.html** in your own desktop Chrome or Edge browser. On Windows, **Open Z Note.cmd** opens it in a dedicated browser window.
+3. On Windows, double-click **Open Z Note.cmd**. It opens your own Chrome or Edge browser in a dedicated window and enables background Keep Awake. You can also open **Z Note.html** directly, with visible-window Keep Awake only.
 4. In the first-run dialog, click **Choose source folder** and select that extracted **Z Note** folder. Allow the browser to save files. The app creates a **Z Note notebook** subfolder for your pages and pictures.
 
-No installer, account, server or development tools are needed. The extracted app works offline. Keep the `app` folder beside `Z Note.html`.
+No installer, account or development tools are needed. The extracted app works offline. Keep the `app` folder beside `Z Note.html`. The Windows launcher uses the .NET Framework included with Windows 10/11.
 
 ```text
 Z Note/
-  Z Note.html          ← open this in your browser
-  Open Z Note.cmd      ← optional Windows launcher
+  Open Z Note.cmd      ← open this on Windows for background Keep Awake
+  Z Note.html          ← direct browser entry (visible-window Keep Awake)
   START HERE.txt
   app/
   Z Note notebook/     ← created after you choose your source folder
@@ -42,7 +42,15 @@ Download and extract a fresh copy into a new folder. Keep your existing **Z Note
 
 ## Browser features
 
-Use desktop Chrome or Edge for direct folder access. Other browsers can use browser storage and downloadable backups where supported. Screen capture and folder access require permission. **Keep Awake** works while Z Note is visible, pauses when hidden and starts off after reopening; the browser or battery-saving settings can stop it.
+Use desktop Chrome or Edge for direct folder access. Other browsers can use browser storage and downloadable backups where supported. Screen capture and folder access require permission.
+
+## Keep Awake
+
+On Windows, open **Open Z Note.cmd**, then click **Keep Awake** beside **Snip**. **Awake on** means Windows is keeping the display and computer awake even when Z Note is minimized or covered by another app. Click again to stop. Closing or reloading that Z Note window releases the request; each new session starts off. It does not override manual sleep, locking, lid-close actions or Windows policy.
+
+Opening the HTML directly or using the hosted app provides browser-only mode: **Awake: visible**. That mode pauses when hidden. To get background support, download the current ZIP and reopen through the Windows launcher.
+
+The launcher starts `app/native/ZNoteHost.exe`, a small helper whose source is in this repository. It opens the same local HTML file and talks only to that window over an authenticated connection on your own PC. It does not change power settings or move the mouse. If the helper disconnects, the button switches off; reopen using the launcher. The helper exits shortly after its Z Note windows close.
 
 The app includes no analytics or external service integrations, and does not upload notebook contents to GitHub. GitHub Pages hosts the download page and the public application files.
 
@@ -54,12 +62,16 @@ Run the dependency-free checks with Node.js:
 
 ```sh
 node --test tests/awake.test.cjs
+node --test tests/native-bridge.test.cjs tests/awake-native-integration.test.cjs
 node --test tests/setup.test.cjs
 ```
 
-To rebuild the portable ZIP in PowerShell:
+To build and test the Windows helper, then rebuild the portable ZIP in PowerShell:
 
 ```powershell
+powershell -NoProfile -File scripts/build-native.ps1
+powershell -NoProfile -File tests/test-native.ps1
+node --test tests/native-awake.test.cjs
 powershell -NoProfile -File scripts/package-portable.ps1
 ```
 

@@ -1,16 +1,17 @@
-/* Z Note · keep the screen awake while this window is visible */
+/* Z Note · Windows background Keep Awake, with a visible-tab browser fallback */
 (function () {
   'use strict';
   const ZN = window.ZN;
-  const supported = window.isSecureContext !== false && !!(navigator.wakeLock && navigator.wakeLock.request);
+  const native = ZN.awakeNative && ZN.awakeNative.available ? ZN.awakeNative : null;
+  const supported = !!native || (window.isSecureContext !== false && !!(navigator.wakeLock && navigator.wakeLock.request));
   let enabled = false, lock = null, pending = false, error = '', version = 0;
-  let work = Promise.resolve(), initialized = false, control = null;
+  let work = Promise.resolve(), initialized = false, control = null, explainedBrowser = false, closing = false;
   const listeners = new Set();
   const expectedReleases = new WeakSet();
   const visible = () => document.visibilityState === 'visible';
 
   function state() {
-    return { enabled, active: !!(lock && !lock.released), pending, supported, error };
+    return { enabled, active: native ? native.state().active : !!(lock && !lock.released), pending, supported, error, mode: native ? 'windows' : 'browser' };
   }
 
   function notify() {
@@ -40,6 +41,7 @@
   // Serialize acquisitions and releases. A changed version invalidates an
   // in-flight request, even if the user has already switched on again.
   function reconcile() {
+    if (native) return reconcileNative();
     work = work.then(async () => {
       if (lock && (!enabled || !visible())) {
         const previous = lock;
@@ -90,7 +92,38 @@
     return work;
   }
 
+  function reconcileNative() {
+    work = work.then(async () => {
+      if (closing) return;
+      if (enabled && native.state().active) { notify(); return; }
+      if (!enabled && !native.state().active) { notify(); return; }
+      const attempt = version;
+      pending = true;
+      notify();
+      try {
+        if (enabled) {
+          await native.start();
+          if (attempt !== version || !enabled || closing) await native.stop();
+        } else {
+          await native.stop();
+        }
+      } catch (e) {
+        enabled = false;
+        if (!closing) report(e.message || 'Windows Keep Awake disconnected. Reopen Z Note with Open Z Note.cmd.');
+      } finally {
+        pending = false;
+        notify();
+      }
+    });
+    return work;
+  }
+
   function start() {
+    if (closing) {
+      report('This Windows Keep Awake session has ended. Reopen Z Note with Open Z Note.cmd.');
+      notify();
+      return Promise.resolve();
+    }
     if (!supported) {
       report('Keep Awake is not available in this browser. Open Z Note in a current version of Chrome or Edge.');
       notify();
@@ -98,6 +131,10 @@
     }
     if (!enabled) { enabled = true; version++; }
     error = '';
+    if (!native && !explainedBrowser) {
+      explainedBrowser = true;
+      ZN.ui.toast('Browser Keep Awake works only while Z Note is visible. For minimized use on Windows, download Z Note and open Open Z Note.cmd.', { ms: 10000 });
+    }
     notify();
     return reconcile();
   }
@@ -112,12 +149,12 @@
 
   function paint() {
     const s = state();
-    const label = s.active ? 'Awake on' : s.pending ? (s.enabled ? 'Starting…' : 'Stopping…') : s.enabled ? 'Awake paused' : 'Keep Awake';
+    const label = s.active ? (native ? 'Awake on' : 'Awake: visible') : s.pending ? (s.enabled ? 'Starting…' : 'Stopping…') : s.enabled ? 'Awake paused' : 'Keep Awake';
     const detail = !supported ? 'Keep Awake is unavailable in this browser. Use Chrome or Edge.'
-      : s.active ? 'Keep Awake is on. Click to stop. Pauses when Z Note is hidden.'
+      : s.active ? (native ? 'Windows Keep Awake is on, including when minimized or covered. Click to stop.' : 'Browser Keep Awake is on while visible. Background use requires Open Z Note.cmd.')
       : s.pending ? (s.enabled ? 'Starting Keep Awake. Click to cancel.' : 'Stopping Keep Awake.')
       : s.enabled ? 'Keep Awake is paused. Resumes when Z Note is visible. Click to turn off.'
-      : error || 'Keep the screen on while Z Note is visible. Pauses when minimized or on another tab.';
+      : error || (native ? 'Keep the screen on even when Z Note is minimized or covered. Stops when this window closes.' : 'Keep the screen on while Z Note is visible. Background use requires the Windows launcher, Open Z Note.cmd.');
     control.classList.toggle('awake-on', s.active);
     control.classList.toggle('awake-paused', s.enabled && !s.active);
     control.disabled = s.pending && !s.enabled && !s.active;
@@ -142,6 +179,35 @@
   function init() {
     if (initialized) return;
     initialized = true;
+    if (native) {
+      native.subscribe(s => {
+        if (!s.connected && s.error && !closing) {
+          const wasEnabled = enabled;
+          enabled = false;
+          version++;
+          error = s.error;
+          if (wasEnabled && !pending) report(s.error);
+        }
+        notify();
+      });
+      // Connect immediately to keep the launcher session alive, but never
+      // request power until the user presses the button.
+      native.connect().catch(e => { if (!closing) { error = e.message; notify(); } });
+      window.addEventListener('pagehide', () => {
+        closing = true;
+        enabled = false;
+        version++;
+        native.close();
+        notify();
+      });
+      window.addEventListener('pageshow', event => {
+        if (event.persisted && closing) {
+          error = 'This Windows Keep Awake session has ended. Reopen Z Note with Open Z Note.cmd.';
+          notify();
+        }
+      });
+      return;
+    }
     document.addEventListener('visibilitychange', () => {
       version++;
       reconcile();

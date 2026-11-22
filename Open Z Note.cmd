@@ -8,6 +8,17 @@ if not exist "%PAGE%" (
   pause
   exit /b 1
 )
+rem The helper opens the same local HTML, keeping existing browser storage.
+set "AWAKEHOST=%~dp0app\native\ZNoteHost.exe"
+if exist "%AWAKEHOST%" (
+  if defined ZNOTE_DRYRUN (
+    echo "%AWAKEHOST%" --page "%PAGE%"
+    exit /b 0
+  )
+  start "" "%AWAKEHOST%" --page "%PAGE%"
+  exit /b 0
+)
+echo Windows Keep Awake helper is missing. Opening in visible-window mode.
 set "BROWSER="
 for %%B in (
   "%ProgramFiles%\Google\Chrome\Application\chrome.exe"
