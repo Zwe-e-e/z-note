@@ -31,6 +31,14 @@ If the browser asks again after reopening, click "Allow" in Z Note to resume
 folder access. You can manage the folder and download or restore a backup in:
     Style & data > Sync & backup
 
+SOURCE FOLDER LOCATION
+The bottom of the sidebar shows your source folder and "Z Note notebook".
+Click it for the full details, Copy location, and Locate folder.
+Browsers hide the complete Windows path. To display it, paste the selected
+parent folder's path from File Explorer into "Selected folder's full path".
+This optional label stays in this browser; it does not move your notes or
+change the folder connection.
+
 "Use browser storage" lets you start without a folder. Browser storage does
 not travel with the app folder, and clearing site data can erase it. Download
 backups regularly. If storage is blocked, the app offers a temporary session;

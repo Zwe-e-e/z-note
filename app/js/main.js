@@ -22,6 +22,7 @@
     if (ZN.awake) ZN.awake.init();
     ZN.shell.init();
     if (ZN.sync) await ZN.sync.init();
+    if (ZN.sourceFolder) await ZN.sourceFolder.init();
     if (ZN.setup) await ZN.setup.init();
     if (ZN.store.memoryOnly) {
       ZN.ui.toast('This browser is blocking storage, so nothing will be saved. Open Z Note in a normal (not private) window.', { error: true, ms: 12000 });

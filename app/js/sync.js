@@ -385,7 +385,7 @@
   sync.chip = function () {
     const cls = busy ? '.busy' : (sync.state === 'locked' || sync.state === 'error' ? '.warn' : '');
     return h('button.ibtn.sync-chip' + cls, {
-      type: 'button', 'aria-label': 'Sync', 'data-tip': 'Sync folder: ' + sync.statusText(),
+      type: 'button', 'aria-label': 'Sync', 'data-tip': 'Source folder: ' + (ZN.sourceFolder ? ZN.sourceFolder.info().notebookPath : sync.dir.name + ' / ' + SUB) + ' — ' + sync.statusText(),
       onclick: () => { if (sync.state === 'locked') sync.unlock(); else run(); }
     }, ZN.icon('sync', 17));
   };
@@ -403,7 +403,7 @@
 
   /* the "Sync folder" section of Style & data */
   sync.pane = function () {
-    const note = h('p.set-note'), actions = h('div.set-actions');
+    const note = h('div.set-note'), actions = h('div.set-actions');
     const fail = e => { if (!e || e.name !== 'AbortError') ui.toast('That did not work: ' + ((e && e.message) || e), { error: true, ms: 7000 }); };
     function fill() {
       U.clear(actions);
@@ -422,7 +422,9 @@
         }, ZN.icon('folder', 15), 'Choose the sync folder'));
         return;
       }
-      note.replaceChildren('Syncing with ', h('b', sync.dir.name), ' — ' + sync.statusText() + '.');
+      note.replaceChildren('Syncing with ', h('b', sync.dir.name), ' — ' + sync.statusText() + '.',
+        h('div.source-path', ZN.sourceFolder ? ZN.sourceFolder.info().notebookPath : sync.dir.name + ' / ' + SUB));
+      if (ZN.sourceFolder) actions.append(h('button.btn', { type: 'button', onclick: () => ZN.sourceFolder.open() }, ZN.icon('folder', 15), 'Source folder details'));
       if (sync.state === 'locked') actions.append(h('button.btn.primary', { type: 'button', onclick: async () => { await sync.unlock(); fill(); } }, 'Allow access'));
       else actions.append(h('button.btn', {
         type: 'button', onclick: async () => {
@@ -435,6 +437,7 @@
     }
     fill();
     const off = S.on('sync', () => { if (note.isConnected) fill(); else off(); });
+    const offPath = S.on('sourcefolder', () => { if (note.isConnected) fill(); else offPath(); });
     return h('div.set-group', h('h3', 'Sync folder'), note, actions,
       h('p.set-note.muted', 'Each page is its own file. If the same page is changed on two PCs before they have synced, the newer change wins.'));
   };

@@ -148,6 +148,7 @@
       h('nav.side-nav', navRow('home', 'home', 'Home'), navRow('tasks', 'tasks', 'Tasks', due), navRow('snips', 'snip', 'Snips')),
       scroll,
       h('div.side-foot',
+        ZN.sourceFolder ? ZN.sourceFolder.button() : null,
         navRow('trash', 'trash', 'Trash'),
         h('button.row.nav-row', { type: 'button', 'data-act': 'style' }, h('span.row-icon', ZN.icon('palette', 17)), h('span.row-title', 'Style & data'))));
     scroll.scrollTop = top;
@@ -504,6 +505,7 @@
     S.on('save', showSave);
     S.on('external', ids => { if (route.name === 'p' && ids.indexOf(route.arg) >= 0) renderRoute(); });
     S.on('sync', queueTopbar);
+    S.on('sourcefolder', queueTopbar);
     S.on('otherwindow', () => {
       if (document.querySelector('.banner')) return;
       const b = h('div.banner', ZN.icon('info', 16), h('span', 'Z Note is also open in another window. Work in one window at a time so edits don’t overwrite each other.'),

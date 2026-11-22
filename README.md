@@ -28,6 +28,8 @@ Each person gets their own notebook. The shared download contains application fi
 
 Choose a folder when setting up so your notes are saved as files as well as in browser storage. If the browser asks for permission again later, use **Allow** to reconnect it.
 
+The sidebar shows **Source folder** and the notebook location. Click it to copy the location, locate the connected folder, or manage backups. Browsers expose the folder name rather than its full Windows path. You can paste the selected parent folder's full path from File Explorer into the details dialog; this optional display label stays in that browser and does not change where notes are saved.
+
 To open an existing notebook or move it to another PC, copy the whole folder and select the parent that contains **Z Note notebook**. If setup has already been completed, use **Style & data → Sync & backup → Choose the sync folder**. Wait until syncing finishes before copying the notebook folder.
 
 A folder in OneDrive or another desktop sync service can carry the files between your computers. Z Note itself does not provide cloud accounts or real-time collaboration; if the same page is edited on two computers before syncing, the newer change wins.
@@ -64,6 +66,7 @@ Run the dependency-free checks with Node.js:
 node --test tests/awake.test.cjs
 node --test tests/native-bridge.test.cjs tests/awake-native-integration.test.cjs
 node --test tests/setup.test.cjs
+node --test tests/source-folder.test.cjs
 ```
 
 To build and test the Windows helper, then rebuild the portable ZIP in PowerShell:
