@@ -152,6 +152,7 @@
         navRow('trash', 'trash', 'Trash'),
         h('button.row.nav-row', { type: 'button', 'data-act': 'style' }, h('span.row-icon', ZN.icon('palette', 17)), h('span.row-title', 'Style & data')),
         h('button.row.nav-row', { type: 'button', 'data-act': 'updates' }, h('span.row-icon', ZN.icon('download', 17)), h('span.row-title', 'Check for updates')),
+        h('button.row.nav-row', { type: 'button', 'data-act': 'donate' }, h('span.row-icon', { 'aria-hidden': 'true' }, '♡'), h('span.row-title', 'Donate')),
         ZN.version ? h('div.app-version', { 'aria-label': 'Z Note version ' + ZN.version }, 'Z Note v' + ZN.version) : null));
     scroll.scrollTop = top;
     markActive();
@@ -206,6 +207,7 @@
         if (a === 'search') { if (ZN.search) ZN.search.open(); return; }
         if (a === 'style') { if (ZN.settings) ZN.settings.open(); return; }
         if (a === 'updates') { if (ZN.updates) ZN.updates.open(); return; }
+        if (a === 'donate') { ZN.support.open(); return; }
         if (a === 'collapse') { toggleSidebar(); return; }
       }
       if (row) ZN.openPage(row.dataset.id);

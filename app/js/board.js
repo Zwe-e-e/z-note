@@ -40,6 +40,10 @@
     for (let i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = Math.imul(x, 16777619); }
     return x >>> 0;
   }
+  /* Mulberry32: Tommy Ettinger (2017), CC0/public domain; JS reference by Bryc (public domain).
+     https://gist.github.com/tommyettinger/46a874533244883189143505d203312c
+     https://github.com/bryc/code/blob/master/jshash/PRNGs.md#mulberry32
+     See THIRD_PARTY_NOTICES.md, or START HERE.txt in the portable package. */
   function prng(seed) {
     let a = seed >>> 0;
     return function () {

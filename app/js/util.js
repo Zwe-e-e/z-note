@@ -4,6 +4,62 @@
   const ZN = (window.ZN = window.ZN || {});
   const U = (ZN.util = {});
 
+  // Public donation settings shared by the app and download page.
+  // Add only your public PayPal.Me link, never account credentials. See DONATIONS.md.
+  const donation = { paypalMe: 'https://paypal.me/shweba', currency: 'USD' };
+  ZN.support = {
+    currency: donation.currency,
+    paypalUrl(amount) {
+      const match = /^https:\/\/(?:www\.)?paypal\.me\/([a-z0-9]{1,20})\/?$/i.exec(donation.paypalMe);
+      if (!match || ![1, 3, 5].includes(amount) || !['USD', 'SGD'].includes(donation.currency)) return '';
+      return 'https://paypal.me/' + match[1] + '/' + amount + donation.currency;
+    },
+    open() {
+      if (document.querySelector('.donate-dialog')) return;
+      const h = U.h, previousFocus = document.activeElement;
+      let selected = 3;
+      const ready = !!ZN.support.paypalUrl(selected);
+      const checkout = ready
+        ? h('a.btn.primary.donate-paypal', {
+          href: ZN.support.paypalUrl(selected), target: '_blank', rel: 'noopener noreferrer',
+          referrerpolicy: 'no-referrer'
+        }, 'Continue with PayPal ↗')
+        : h('button.btn.primary.donate-paypal', { type: 'button', disabled: true }, 'Continue with PayPal');
+      const amounts = h('fieldset.donate-amounts', h('legend', 'Choose a one-time amount'),
+        [1, 3, 5].map(amount => h('label.donate-option',
+          h('input', { type: 'radio', name: 'donation-amount', value: String(amount), checked: amount === selected,
+            onchange() {
+              selected = amount;
+              if (ready) checkout.setAttribute('href', ZN.support.paypalUrl(selected));
+            }
+          }), h('span', '$' + amount), h('small', donation.currency))));
+      const dialog = h('dialog.donate-dialog', { 'aria-labelledby': 'donate-title', 'aria-describedby': 'donate-description' },
+        h('div.donate-head', h('h2#donate-title', 'Support Z Note'),
+          h('button.btn.quiet.sm', { type: 'button', 'aria-label': 'Close donation dialog', onclick: () => dialog.close() }, 'Close')),
+        h('p#donate-description', 'Z Note is free and open source. If it helps you, you can support its development with an optional donation.'),
+        amounts,
+        h('p.donate-note', ready
+          ? 'You’ll review the recipient and amount on PayPal before confirming. Opens in a new tab.'
+          : 'Donations aren’t available yet. Please check back soon.'),
+        checkout,
+        h('p.donate-note', 'Every feature is available for free. Thank you for using Z Note.'));
+      // Keep app shortcuts from creating pages or opening search behind this modal.
+      // Preserve native radio navigation, Tab focus trapping and Escape dismissal.
+      dialog.addEventListener('keydown', event => event.stopPropagation());
+      dialog.addEventListener('paste', event => event.stopPropagation());
+      ['dragover', 'drop'].forEach(type => dialog.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+      }));
+      dialog.addEventListener('close', () => {
+        dialog.remove();
+        if (previousFocus && previousFocus.isConnected) previousFocus.focus();
+      });
+      document.body.appendChild(dialog);
+      dialog.showModal();
+    }
+  };
+
   U.uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
   /* h('div.card#id', {props}, ...children) → element */
