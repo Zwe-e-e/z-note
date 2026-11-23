@@ -2,8 +2,8 @@
 (function () {
   'use strict';
   const ZN = window.ZN, U = ZN.util, h = U.h;
-  const REPO = 'https://github.com/ZweWH/z-note';
-  const API = 'https://api.github.com/repos/ZweWH/z-note/releases/latest';
+  const REPO = 'https://github.com/Zwe-e-e/z-note';
+  const API = 'https://api.github.com/repos/Zwe-e-e/z-note/releases/latest';
   const LATEST = REPO + '/releases/latest';
   let pending = null;
   let installing = false;
