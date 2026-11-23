@@ -1,6 +1,6 @@
 # Z Note
 
-**Current release: [v2.4.0](https://github.com/ZweWH/z-note/releases/tag/v2.4.0)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
+**Current release: [v2.4.1](https://github.com/ZweWH/z-note/releases/tag/v2.4.1)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
 
 Your installed version appears at the bottom of the app sidebar and in the **Style & data** title. Use **Check for updates** in the sidebar, or **Style & data → Updates**, to check for a newer release.
 

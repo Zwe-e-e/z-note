@@ -446,7 +446,7 @@ html[data-paper="night"] .seg button.on { color: var(--ink); }
 .page-title, .home-hello, .card-title, .modal-title, .listing h1, .set-group h3 { font-weight: var(--head-weight, 400); }
 
 /* sync button in the top bar */
-.sync-chip { color: var(--ink-3); }
+.sync-chip { color: var(--ink-2); white-space: nowrap; }
 .sync-chip.warn { color: var(--red); }
-.sync-chip.busy svg { animation: zn-spin 1s linear infinite; }
+.sync-chip.busy { cursor: progress; }
 @keyframes zn-spin { to { transform: rotate(360deg); } }

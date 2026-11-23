@@ -448,10 +448,10 @@
   /* small button for the top bar */
   sync.chip = function () {
     const cls = busy ? '.busy' : (sync.state === 'locked' || sync.state === 'error' ? '.warn' : '');
-    return h('button.ibtn.sync-chip' + cls, {
-      type: 'button', 'aria-label': 'Sync', 'data-tip': 'Source folder: ' + (ZN.sourceFolder ? ZN.sourceFolder.info().notebookPath : sync.dir.name + ' / ' + SUB) + ' — ' + sync.statusText(),
+    return h('button.btn.sm.sync-chip' + cls, {
+      type: 'button', disabled: busy || paused > 0, 'aria-label': busy ? 'Syncing' : 'Sync', 'aria-busy': String(busy), 'data-tip': 'Source folder: ' + (ZN.sourceFolder ? ZN.sourceFolder.info().notebookPath : sync.dir.name + ' / ' + SUB) + ' — ' + sync.statusText(),
       onclick: () => sync.now()
-    }, ZN.icon('sync', 17));
+    }, busy ? 'Syncing…' : 'Sync');
   };
 
   function showBanner() {

@@ -1,5 +1,5 @@
 Z NOTE - PORTABLE BROWSER APP
-Version 2.4.0 - released 23 November 2026
+Version 2.4.1 - released 23 November 2026
 Check your installed version at the bottom of the sidebar or in Style & data.
 Use "Check for updates" in the sidebar or Style & data > Updates.
 

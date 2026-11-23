@@ -1,5 +1,13 @@
 # Z Note release history
 
+## v2.4.1 — 2026-11-23
+
+- Replace the circular-arrow control beside Keep Awake with a visible **Sync** button.
+- Show **Syncing…** while folder sync runs and prevent repeated clicks during syncing or app updates.
+- Verify that Windows Keep Awake remains enabled when the app is hidden, minimized or covered. Open **Open Z Note.cmd** and enable **Awake on**; browser-only mode still requires a visible window.
+
+The Windows helper, notebook format and source-folder settings are unchanged.
+
 ## v2.4.0 — 2026-11-23
 
 - Add **Install update automatically** when Z Note is opened with the Windows launcher. Save a recovery backup first, show its local path, verify the official release download, update the app in its existing location, and reload after installation is confirmed.
