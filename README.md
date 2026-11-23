@@ -1,8 +1,10 @@
 # Z Note
 
-**Current release: [v2.5.0](https://github.com/Zwe-e-e/z-note/releases/tag/v2.5.0)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
+**Current release: [v2.5.1](https://github.com/Zwe-e-e/z-note/releases/tag/v2.5.1)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
 
-**New in v2.5.0:** A/B/C task priorities with a remembered one- or three-column view, tasks from every list together, sticky-note alignment guides, and the blue Z-icon portable launcher. Existing notes, task content and stored priorities remain unchanged until you edit them. The notebook format stays compatible.
+**New in v2.5.1:** An MIT open-source license, third-party credits and optional PayPal donations from the app and download page. All features remain free. Notes, source-folder settings and the notebook format are unchanged.
+
+Includes A/B/C task priorities with a remembered one- or three-column view, tasks from every list together, sticky-note alignment guides, and the blue Z-icon portable launcher. Existing task content and stored priorities remain unchanged until you edit them.
 
 Your installed version appears at the bottom of the app sidebar and in the **Style & data** title. Use **Check for updates** in the sidebar, or **Style & data → Updates**, to check for a newer release.
 
@@ -90,6 +92,14 @@ The launcher starts `app/native/ZNoteHost.exe`, a small helper whose source is i
 
 The app includes no analytics and does not upload notebook contents to GitHub. A manual update check retrieves public release information from GitHub; it does not send your notes, pictures, or source-folder path. GitHub Pages hosts the download page and the public application files.
 
+## License and support
+
+Z Note is free and open source under the [MIT License](LICENSE). You may use, modify and share it, including for commercial purposes, provided you keep the copyright and license notice. MIT also permits others to sell copies or include the code in other products.
+
+Donations are optional support for development. They do not unlock features or change the license; all Z Note features are available without donating.
+
+See [third-party components and credits](THIRD_PARTY_NOTICES.md) for the Mulberry32 algorithm, development tools and installed platform dependencies. The portable package includes the full MIT License and algorithm credit in `START HERE.txt`.
+
 ## Development
 
 The app uses plain HTML, CSS and JavaScript. `Z Note.html` is the local app entry point. `index.html` is the public download page.
@@ -124,6 +134,6 @@ powershell -NoProfile -File tests/test-package.ps1
 
 The packaging script includes only the app, launcher and quick guide, and verifies the archive contents. Personal notebooks, exported backups and credentials must never be published. `.gitignore` excludes standard notebook and backup paths; only the curated portable ZIP is allowed.
 
-For v2.5.0, publish the full 38-file `downloads/Z-Note-Portable.zip` through Pages. `-LegacyUpdater` builds the 37-file `downloads/Z-Note-v2.5.0-Portable.zip` with the previous file layout and the updated helper. This is the manual migration package for existing installations: its archive layout is compatible, but installed v2.4.2 clients cannot automatically follow the repository-owner change. Attach that versioned ZIP to the GitHub release. If also attaching the full icon download, name it `Z-Note-v2.5.0-With-Icon.zip` to keep the two routes distinct. The v2.5.0 helper accepts both layouts and uses the new repository for future automatic updates. The migration package preserves any existing launcher; the full download includes the new icon launcher.
+For v2.5.1, publish the full 38-file `downloads/Z-Note-Portable.zip` through Pages. `-LegacyUpdater` builds the 37-file `downloads/Z-Note-v2.5.1-Portable.zip` for existing automatic updaters; it preserves the installed launcher. Attach that versioned ZIP to the GitHub release. Name the full icon download `Z-Note-v2.5.1-With-Icon.zip` to keep the two routes distinct. The unchanged v2.5.0 helper accepts both layouts and uses the organization's repository for automatic updates. The full download includes a launcher with the current version. Keep the earlier v2.5.0 migration release available for installed v2.4.2 and older clients, which cannot automatically follow the repository-owner change.
 
 GitHub Pages publishes the `main` branch, repository root. Rebuild the ZIP whenever application files change so the download matches the source.

@@ -1,5 +1,12 @@
 # Z Note release history
 
+## v2.5.1 — 2026-11-23
+
+- Add the MIT license and third-party credits. Include the full license in the portable quick guide while preserving compatibility with existing automatic updaters.
+- Add **Donate** below **Check for updates** and on the download page, with optional $1, $3 and $5 USD contributions through PayPal. All features remain free; notes and source-folder settings are unchanged.
+
+The notebook format and Windows helper are unchanged. Existing v2.5.0 installations can install this release through **Check for updates → Install update automatically** when opened with the Windows launcher.
+
 ## v2.5.0 — 2026-11-23
 
 - Open the portable folder with **Z Note.exe**, which has the Z icon and works after moving the whole folder to another PC. It starts the existing Windows helper for background Keep Awake and automatic updates without a command window.
