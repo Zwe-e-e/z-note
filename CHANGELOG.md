@@ -1,5 +1,14 @@
 # Z Note release history
 
+## v2.4.2 — 2026-11-23
+
+- Load an existing notebook's pages and pictures together before showing them. If a file is missing, still downloading, or cannot be saved, keep the previous notebook and folder connection available and explain the problem.
+- Refresh visible pictures when changes arrive through Sync, including pictures that previously appeared missing.
+- Save updated photo bytes even when the edited picture has the same file size. Recheck pictures when a cloud service delivers the image file after its metadata.
+- Preserve local edits made while a folder is opening. Opening an existing notebook reads it first, then schedules normal two-way sync after the import succeeds.
+
+The notebook format, Windows helper and source-folder settings remain compatible. To use the same notes on another PC, connect both PCs to the same notebook folder and let OneDrive finish transferring its files.
+
 ## v2.4.1 — 2026-11-23
 
 - Replace the circular-arrow control beside Keep Awake with a visible **Sync** button.

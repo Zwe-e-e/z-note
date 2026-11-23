@@ -189,12 +189,19 @@
   /* ---------- data pane ---------- */
   function dataPane() {
     const stats = h('p.set-note', 'Counting…');
-    (async () => {
+    let countVersion = 0;
+    async function count() {
+      const version = ++countVersion;
       const blobs = await S.listBlobs();
       let used = '';
       try { const est = await navigator.storage.estimate(); if (est && est.usage) used = ' · about ' + U.bytes(est.usage) + ' on disk'; } catch (e) {}
-      stats.textContent = S.live().filter(p => p.type !== 'notebook').length + ' pages · ' + blobs.length + ' pictures' + used;
-    })();
+      if (version === countVersion) stats.textContent = S.live().filter(p => p.type !== 'notebook').length + ' pages · ' + blobs.length + ' pictures' + used;
+    }
+    const recount = () => count().catch(() => { stats.textContent = 'Could not count saved pictures. Try opening Sync & backup again.'; });
+    recount();
+    for (const event of ['tree', 'blobs']) {
+      const off = S.on(event, () => { if (stats.isConnected) recount(); else off(); });
+    }
     return h('div.settings',
       h('p.set-note', h('b', 'Where your notes live: '), 'inside this browser’s storage on this PC. Turn on a sync folder to keep them in OneDrive as well and share them with your other PCs — or save a backup file from time to time.'),
       stats,

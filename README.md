@@ -1,6 +1,6 @@
 # Z Note
 
-**Current release: [v2.4.1](https://github.com/ZweWH/z-note/releases/tag/v2.4.1)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
+**Current release: [v2.4.2](https://github.com/ZweWH/z-note/releases/tag/v2.4.2)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
 
 Your installed version appears at the bottom of the app sidebar and in the **Style & data** title. Use **Check for updates** in the sidebar, or **Style & data → Updates**, to check for a newer release.
 
@@ -34,7 +34,9 @@ Choose a folder when setting up so your notes are saved as files as well as in b
 
 The sidebar shows **Source folder** and the notebook location. Click it to copy the location, locate the connected folder, sync now, or open an existing notebook. Browsers expose the folder name rather than its full Windows path. You can paste the selected folder's full path from File Explorer into the details dialog; this optional display label stays in that browser and does not change where notes are saved.
 
-To open an existing notebook, use **Open existing notebook…** in setup, the Source folder dialog, or **Style & data → Sync & backup**. Select **Z Note notebook** itself or the folder containing it. Z Note reconnects to its pages and pictures. If this browser already contains your own notes, the app asks how to combine them with the folder's notebook.
+To open an existing notebook, use **Open existing notebook…** in setup, the Source folder dialog, or **Style & data → Sync & backup**. Select **Z Note notebook** itself or the folder containing it. Z Note loads its pages and pictures together. If files are incomplete or still downloading, it explains the problem and keeps the previous notebook connection. If this browser already contains your own notes, the app asks how to combine them with the folder's notebook.
+
+Check **Source folder → Locate folder** on the original PC to confirm the actual folder in use. A different folder with the same name may contain an older notebook. Press **Sync**, wait for it to finish, then wait for OneDrive before opening that same notebook on another PC.
 
 A folder in OneDrive or a shared network folder can carry changes between your computers:
 
@@ -94,6 +96,7 @@ node --test tests/setup.test.cjs
 node --test tests/source-folder.test.cjs
 node --test tests/updates.test.cjs tests/update-native.test.cjs tests/backup.test.cjs
 node --test tests/sync.test.cjs tests/checkpoint.test.cjs tests/auto-update.test.cjs
+node --test tests/db-sync.test.cjs tests/store-sync.test.cjs
 ```
 
 To build and test the Windows helper, then rebuild the portable ZIP in PowerShell:

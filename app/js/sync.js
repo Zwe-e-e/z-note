@@ -94,7 +94,7 @@
       if (!c || c.lm !== f.lastModified || c.size !== f.size) {
         try {
           const raw = JSON.parse(await f.text());
-          if (!raw || !SAFE_ID.test(String(raw.id))) continue;
+          if (!raw || !SAFE_ID.test(String(raw.id))) throw new Error('Invalid page');
           c = { lm: f.lastModified, size: f.size, id: String(raw.id), mod: modOf(raw) };
           pageCache.set(name, c);
         } catch (e) { throw new Error('A notebook page is incomplete. Wait for the folder service to finish, then sync again.'); }
@@ -120,7 +120,7 @@
       if (!c || c.lm !== f.lastModified || c.size !== f.size) {
         try {
           const meta = JSON.parse(await f.text());
-          if (!meta || !SAFE_ID.test(String(meta.id)) || !SAFE_IMG.test(String(meta.file))) continue;
+          if (!meta || !SAFE_ID.test(String(meta.id)) || !SAFE_IMG.test(String(meta.file))) throw new Error('Invalid picture information');
           c = { lm: f.lastModified, size: f.size, meta };
           imgCache.set(name, c);
         } catch (e) { throw new Error('Picture information is incomplete. Wait for the folder service to finish, then sync again.'); }
@@ -147,102 +147,151 @@
     return { at, files };
   }
 
+  function pictureIds(page) {
+    const content = page.content || {};
+    const items = page.type === 'note' ? content.blocks || [] : page.type === 'board' ? content.items || [] : [];
+    return items.filter(item => item && (item.t === 'image' || item.t === 'img' || item.kind === 'image')).map(item => String(item.src || ''));
+  }
+
+  // Read everything needed before changing browser data or writing to the
+  // shared folder. A half-downloaded picture must never publish a half-notebook.
+  async function preparePull(f, options) {
+    options = options || {};
+    const imageRevision = S.imageRevision();
+    const expectedPages = Array.from(S.pages, ([id, page]) => [id, JSON.stringify(page)]);
+    const expectedTomb = Object.assign({}, S.settings.tomb);
+    const now = Date.now(), replace = !!options.replace;
+    const gone = await readDeleted(f.deleted);
+    const tomb = Object.assign({}, replace ? {} : S.settings.tomb);
+    const removeDeleted = [], removePages = [], removeImages = [];
+    for (const key in gone.at) if (!(tomb[key] >= gone.at[key])) tomb[key] = gone.at[key];
+    for (const key of Object.keys(tomb)) if (now - tomb[key] > KEEP_DELETED) {
+      delete tomb[key]; removeDeleted.push(...(gone.files[key] || []));
+    }
+    const dead = (kind, id, mod) => tomb[kind + ':' + id] >= mod;
+    const remote = await scanPages(f.pages);
+    const rImgs = await scanImages(f.images);
+    const have = new Map((replace ? [] : S.memoryOnly ? await S.listBlobs() : await db.all('blobs')).map(b => [b.id, b]));
+    const pages = [], deletedPages = [], images = [], deletedImages = [], checkedPages = [];
+
+    for (const [id, r] of Array.from(remote)) {
+      const local = replace ? null : S.get(id);
+      if (dead('p', id, r.mod)) {
+        removePages.push(...[r.name].concat(r.extra)); remote.delete(id);
+        if (local && dead('p', id, modOf(local))) deletedPages.push(id);
+        continue;
+      }
+      const incoming = (!local || r.mod > modOf(local)) && (replace || !S.isDirty(id));
+      if (incoming || options.validateAll) {
+        let pg;
+        try {
+          pg = ZN.settings.normalizePage(await readJSON(f.pages, r.name));
+          if (!pg || pg.id !== id || modOf(pg) !== r.mod) throw new Error('Invalid or changing page');
+        } catch (e) { throw new Error('A notebook page is incomplete or changed while opening. Wait for the folder service to finish, then try again.'); }
+        checkedPages.push(pg);
+        if (incoming) pages.push(pg);
+      }
+    }
+    if (!replace) S.pages.forEach(p => {
+      if (!remote.has(p.id) && dead('p', p.id, modOf(p)) && deletedPages.indexOf(p.id) < 0) deletedPages.push(p.id);
+    });
+
+    for (const [id, r] of Array.from(rImgs)) {
+      const local = have.get(id);
+      if (dead('i', id, r.mod)) {
+        removeImages.push(r.name, r.meta.file); rImgs.delete(id);
+        if (local && dead('i', id, modOf(local))) { deletedImages.push(id); have.delete(id); }
+        continue;
+      }
+      let incoming = !local || r.mod > modOf(local);
+      const sameVersion = local && r.mod === modOf(local);
+      if (incoming || options.validateAll || sameVersion) {
+        let rec;
+        try {
+          const file = await (await f.images.getFileHandle(r.meta.file)).getFile();
+          // Cloud sync can deliver metadata before its binary. If that binary
+          // arrives later, reload it even though the logical image version is
+          // unchanged. These file fingerprints stay in browser storage only.
+          // Only refresh versions known to have come from this source. Older
+          // apps may have newer local bytes with the same logical metadata
+          // after their same-sized binary write was skipped.
+          const knownSource = sameVersion && Number.isFinite(local.sourceFileModified) && Number.isFinite(local.sourceFileSize);
+          incoming = incoming || !!(knownSource && (local.sourceFileModified !== file.lastModified || local.sourceFileSize !== file.size));
+          if (!incoming && !options.validateAll) continue;
+          const blob = new Blob([await file.arrayBuffer()], { type: r.meta.mime || 'image/png' });
+          if (!blob.size || (Number.isFinite(r.meta.size) && r.meta.size !== blob.size)) throw new Error('Incomplete picture');
+          rec = { id, blob, mime: r.meta.mime || blob.type, size: blob.size, w: +r.meta.w || 0, h: +r.meta.h || 0,
+            name: String(r.meta.name || ''), kind: r.meta.kind === 'snip' ? 'snip' : 'image', created: +r.meta.created || now, mod: r.mod,
+            sourceFileModified: file.lastModified, sourceFileSize: file.size };
+        } catch (e) { throw new Error('A picture has not finished downloading or cannot be read. Wait for the folder service to finish, then try again.'); }
+        if (incoming) { images.push(rec); have.set(id, rec); }
+      }
+    }
+    for (const [id, local] of Array.from(have)) if (dead('i', id, modOf(local))) {
+      if (deletedImages.indexOf(id) < 0) deletedImages.push(id);
+      have.delete(id);
+    }
+    for (const pg of checkedPages) for (const id of pictureIds(pg)) {
+      // Explicitly deleted pictures are allowed to retain their old placeholder.
+      if (!rImgs.has(id) && !tomb['i:' + id]) throw new Error('This notebook refers to a picture that is missing from its images folder. Finish syncing the original PC and folder service, then try again.');
+    }
+    return { f, gone, tomb, dead, remote, rImgs, pages, deletedPages, images, deletedImages, replace, imageRevision, expectedPages, expectedTomb,
+      removeDeleted, removePages, removeImages };
+  }
+
   /* ---------- one round of syncing ---------- */
-  async function performRun() {
+  async function performRun(options) {
+    options = options || {};
     if (paused || !sync.dir || sync.state === 'locked' || sync.state === 'none') return false;
     let ok = false;
     try {
-      await S.flush();
-      const f = await folders();
-      const now = Date.now();
+      if (S.checkpoint && !S.memoryOnly) await S.checkpoint(); else await S.flush();
+      const plan = options.prepared || await preparePull(await folders());
+      const { f, gone, tomb, dead, remote, rImgs } = plan;
+      if (plan.replace) {
+        const localPictures = S.memoryOnly ? await S.listBlobs() : await db.all('blobs');
+        if (localPictures.length || !localPristine()) throw new Error('Your notes changed while the folder was opening. Open the notebook again and combine both copies to keep your edits.');
+      }
+      // One transaction installs pictures and their referencing pages before
+      // any view receives a change event. A failed save leaves the old view intact.
+      await S.applySyncSnapshot({ pages: plan.pages, deletedPages: plan.deletedPages, images: plan.images,
+        deletedImages: plan.deletedImages, replace: plan.replace, tomb, imageRevision: plan.imageRevision,
+        expectedPages: plan.expectedPages, expectedTomb: plan.expectedTomb });
 
-      /* 1 · deletions: this PC and the folder tell each other what was deleted for good */
-      const gone = await readDeleted(f.deleted);
-      const tomb = S.settings.tomb || (S.settings.tomb = {});
-      let tombChanged = false;
-      for (const key in gone.at) if (!(tomb[key] >= gone.at[key])) { tomb[key] = gone.at[key]; tombChanged = true; }
-      for (const key of Object.keys(tomb)) {
-        if (now - tomb[key] > KEEP_DELETED) {
-          delete tomb[key];
-          tombChanged = true;
-          for (const n of gone.files[key] || []) await remove(f.deleted, n);
-        } else if (!(gone.at[key] >= tomb[key])) {
+      if (!options.pullOnly) {
+        for (const name of plan.removeDeleted) await remove(f.deleted, name);
+        for (const key of Object.keys(tomb)) if (!(gone.at[key] >= tomb[key])) {
           await writeFile(f.deleted, key.replace(':', '_') + '_' + tomb[key] + '.del', new Blob(['']));
         }
-      }
-      if (tombChanged) S.saveSettings();
-      const dead = (kind, id, mod) => tomb[kind + ':' + id] >= mod;
+        for (const name of plan.removePages) { await remove(f.pages, name); pageCache.delete(name); }
+        for (const name of plan.removeImages) { await remove(f.images, name); imgCache.delete(name); }
 
-      /* 2 · pages: take what is newer in the folder … */
-      const remote = await scanPages(f.pages);
-      const puts = [], dels = [];
-      for (const [id, r] of Array.from(remote)) {
-        const l = S.get(id);
-        if (dead('p', id, r.mod)) {
-          for (const n of [r.name].concat(r.extra)) { await remove(f.pages, n); pageCache.delete(n); }
-          remote.delete(id);
-          if (l && dead('p', id, modOf(l))) dels.push(id);
-          continue;
+        // Send pictures before pages that may refer to them. A same-sized edit
+        // still has different bytes, so a newer image always writes its binary.
+        const have = S.memoryOnly ? await S.listBlobs() : await db.all('blobs');
+        for (const l of have) {
+          const id = l.id;
+          const mod = modOf(l);
+          if (dead('i', id, mod)) continue;
+          const r = rImgs.get(id);
+          if (r && mod <= r.mod) continue;
+          const file = id + '.' + extOf(l.mime || '');
+          await writeFile(f.images, file, l.blob);
+          const meta = { id, mime: l.mime, name: l.name, kind: l.kind, w: l.w, h: l.h, created: l.created, mod, size: l.blob.size, file };
+          const mf = await writeJSON(f.images, id + '.json', meta);
+          imgCache.set(id + '.json', { lm: mf.lastModified, size: mf.size, meta });
         }
-        if ((!l || r.mod > modOf(l)) && !S.isDirty(id)) {
-          try {
-            const pg = ZN.settings.normalizePage(await readJSON(f.pages, r.name));
-            if (pg && pg.id === id) puts.push(pg);
-          } catch (e) { throw new Error('A notebook page changed while syncing. Wait for the folder service to finish, then sync again.'); }
+        for (const p of Array.from(S.pages.values())) {
+          const mod = modOf(p);
+          if (dead('p', p.id, mod)) continue;
+          const r = remote.get(p.id), canon = p.id + '.json';
+          if (!r || mod > r.mod || (r.name !== canon && mod >= r.mod)) {
+            const file = await writeJSON(f.pages, canon, p);
+            pageCache.set(canon, { lm: file.lastModified, size: file.size, id: p.id, mod });
+            if (r && r.name !== canon) { await remove(f.pages, r.name); pageCache.delete(r.name); }
+          }
+          if (r) for (const name of r.extra) { await remove(f.pages, name); pageCache.delete(name); }
         }
-      }
-      S.pages.forEach(p => { if (!remote.has(p.id) && dead('p', p.id, modOf(p)) && dels.indexOf(p.id) < 0) dels.push(p.id); });
-      await S.applyRemote(puts, dels);
-
-      /* … and write what is newer here */
-      for (const p of Array.from(S.pages.values())) {
-        const mod = modOf(p);
-        if (dead('p', p.id, mod)) continue;
-        const r = remote.get(p.id), canon = p.id + '.json';
-        if (!r || mod > r.mod || (r.name !== canon && mod >= r.mod)) {
-          const file = await writeJSON(f.pages, canon, p);
-          pageCache.set(canon, { lm: file.lastModified, size: file.size, id: p.id, mod });
-          if (r && r.name !== canon) { await remove(f.pages, r.name); pageCache.delete(r.name); }
-        }
-        if (r) for (const n of r.extra) { await remove(f.pages, n); pageCache.delete(n); }
-      }
-
-      /* 3 · pictures, the same way */
-      const rImgs = await scanImages(f.images);
-      const have = new Map((S.memoryOnly ? await S.listBlobs() : await db.all('blobs')).map(b => [b.id, b]));
-      for (const [id, r] of Array.from(rImgs)) {
-        const l = have.get(id);
-        if (dead('i', id, r.mod)) {
-          await remove(f.images, r.name);
-          await remove(f.images, r.meta.file);
-          imgCache.delete(r.name);
-          rImgs.delete(id);
-          if (l) { await S.delBlob(id, { remote: true }); have.delete(id); }
-          continue;
-        }
-        if (!l || r.mod > modOf(l)) {
-          try {
-            const file = await (await f.images.getFileHandle(r.meta.file)).getFile();
-            const blob = new Blob([await file.arrayBuffer()], { type: r.meta.mime || 'image/png' });
-            const rec = {
-              id, blob, mime: r.meta.mime || blob.type, size: blob.size, w: +r.meta.w || 0, h: +r.meta.h || 0,
-              name: String(r.meta.name || ''), kind: r.meta.kind === 'snip' ? 'snip' : 'image', created: +r.meta.created || now, mod: r.mod
-            };
-            await S.putBlobRecord(rec);
-            have.set(id, rec);
-          } catch (e) { throw new Error('A picture has not finished downloading or could not be saved. Wait for the folder service to finish, then sync again.'); }
-        }
-      }
-      for (const [id, l] of have) {
-        const mod = modOf(l);
-        if (dead('i', id, mod)) { await S.delBlob(id, { remote: true }); continue; }
-        const r = rImgs.get(id);
-        if (r && mod <= r.mod) continue;
-        const file = id + '.' + extOf(l.mime || '');
-        if (!r || r.meta.size !== l.blob.size || r.meta.file !== file) await writeFile(f.images, file, l.blob);
-        const meta = { id, mime: l.mime, name: l.name, kind: l.kind, w: l.w, h: l.h, created: l.created, mod, size: l.blob.size, file };
-        const mf = await writeJSON(f.images, id + '.json', meta);
-        imgCache.set(id + '.json', { lm: mf.lastModified, size: mf.size, meta });
       }
 
       sync.lastAt = S.settings.syncAt = Date.now();
@@ -312,6 +361,7 @@
     try {
       const view = ZN.shell && ZN.shell.view();
       if (view && view.prepareExport) await view.prepareExport();
+      if (S.checkpoint && !S.memoryOnly) await S.checkpoint(); else await S.flush();
       const location = await locate(handle, !!o.existing);
       pageCache.clear();
       imgCache.clear();
@@ -324,20 +374,24 @@
       }
       if (!choice) return false;
       if (choice !== 'merge' && !(choice === 'adopt' && pristine)) throw new Error('Save a backup and combine the notebooks to keep this PC’s notes.');
+      const prepared = location.folders ? await preparePull(location.folders, { replace: choice === 'adopt', validateAll: true }) : null;
       if (paused) throw new Error('An app update is in progress. Try connecting the notebook again when it finishes.');
       // Persist the exact selection and layout together. Existing parent-folder
       // handles remain readable through the legacy syncDir fallback on startup.
       if (!S.memoryOnly) { await db.put('meta', { handle, direct: location.direct }, 'syncLocation'); locationSaved = true; }
       sync.dir = handle; sync.direct = location.direct;
-      if (choice === 'adopt') await S.wipeLocal();
       sync.state = 'ready';
-      const ok = await performRun();
-      if (choice === 'adopt') { S.settings.seedAt = 0; S.saveSettings(); ZN.go('home'); }
+      const ok = await performRun({ prepared, pullOnly: !!o.existing });
+      if (!ok) throw new Error(sync.lastError || 'The notebook could not be opened. Your previous folder remains connected.');
+      if (choice === 'adopt') ZN.go('home');
+      if (o.existing) later();
       return ok;
     } catch (e) {
       sync.dir = before;
       sync.state = beforeState;
       sync.direct = beforeDirect;
+      hideBanner();
+      if (beforeState === 'locked') showBanner();
       pageCache.clear(); imgCache.clear();
       if (locationSaved) {
         try { await db.put('meta', { handle: before, direct: beforeDirect }, 'syncLocation'); }
@@ -485,7 +539,7 @@
           }
         }, ZN.icon('folder', 15), 'Choose the sync folder'));
         actions.append(h('button.btn', { type: 'button', onclick: async () => {
-          try { if (await sync.openExisting()) ui.toast('Existing notebook connected and synced.'); } catch (e) { fail(e); }
+          try { if (await sync.openExisting()) ui.toast('Notebook opened with its saved pages and pictures.'); } catch (e) { fail(e); }
           fill();
         } }, ZN.icon('folder', 15), 'Open existing notebook…'));
         return;
@@ -502,7 +556,7 @@
         }
       }, ZN.icon('sync', 15), 'Sync now'));
       actions.append(h('button.btn', { type: 'button', onclick: async () => {
-        try { if (await sync.openExisting()) ui.toast('Existing notebook connected and synced.'); } catch (e) { fail(e); }
+        try { if (await sync.openExisting()) ui.toast('Notebook opened with its saved pages and pictures.'); } catch (e) { fail(e); }
         fill();
       } }, ZN.icon('folder', 15), 'Open existing notebook…'));
       actions.append(h('button.btn.quiet', { type: 'button', onclick: async () => { await sync.unlink(); fill(); } }, 'Stop syncing on this PC'));

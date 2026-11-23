@@ -11,6 +11,7 @@ Z Note backup*.json
 .codex/
 .agents/
 .public-release/
+.private-notebook-*/
 node_modules/
 test-results/
 playwright-report/

@@ -7,10 +7,13 @@
   const listeners = {};
   const dirty = new Set();
   const blobURLs = new Map();
+  const blobVersions = new Map();
+  const imageBindings = new WeakMap();
   const memBlobs = new Map();
   let saveTimer = null, settingsTimer = null, kidIndex = null, memoryOnly = false, channel = null;
   const pendingPageWrites = new Set();
   const pendingDataWork = new Set();
+  let imageWork = Promise.resolve(), imageRevision = 0;
   const winId = U.uid();
 
   const TREE_KEYS = ['title', 'icon', 'fav', 'parentId', 'order', 'trashed', 'color', 'type'];
@@ -281,6 +284,17 @@
     work.then(() => pendingDataWork.delete(work), () => pendingDataWork.delete(work));
     return work;
   }
+  function queueImageWork(task) {
+    const result = imageWork.then(task);
+    imageWork = result.catch(() => {});
+    return trackDataWork(() => result);
+  }
+  function localImageWork(task) {
+    // Count intent before asynchronous decoding/reads. A folder preflight must
+    // not commit a snapshot sampled before a local photo edit began.
+    imageRevision++;
+    return queueImageWork(task);
+  }
 
   function otherWindowsOpen() {
     if (!channel) return Promise.resolve(false);
@@ -323,10 +337,101 @@
     emit('external', changed);
     return changed;
   }
-  function putBlobRecord(rec) { return trackDataWork(async () => {
+  function applySyncSnapshot(changes) {
+    if (changes.replace && pendingDataWork.size) return Promise.reject(new Error('Pictures are still being saved. Wait for them to finish, then open the notebook again.'));
+    const expectedImages = changes.imageRevision === undefined ? imageRevision : changes.imageRevision;
+    return queueImageWork(async () => {
+    if (expectedImages !== imageRevision) throw new Error('A picture changed while the folder was loading. Your local edits are kept. Sync again to load the remaining changes.');
+    const replace = !!changes.replace;
+    if (replace && (!S.settings.seedAt || dirty.size || Object.keys(S.settings.tomb || {}).length ||
+        Array.from(pages.values()).some(p => (+p.mod || +p.updated || +p.created || 0) > S.settings.seedAt))) {
+      throw new Error('This notebook changed while the folder was opening. Try opening it again and combine the notebooks to keep your edits.');
+    }
+    // Folder reads may take long enough for autosave to clear dirty. Compare
+    // the preflight copy too, including pages created/deleted during the read.
+    const expectedPages = changes.expectedPages === undefined ? null : new Map(changes.expectedPages);
+    const unchanged = id => !expectedPages || JSON.stringify(pages.get(id)) === expectedPages.get(id);
+    const modOf = p => p ? (+p.mod || +p.updated || +p.created || 0) : 0;
+    const localTomb = S.settings.tomb || {};
+    const puts = (changes.pages || []).filter(p => p && p.id && !dirty.has(p.id) && unchanged(p.id) &&
+      (replace || (!(localTomb['p:' + p.id] >= modOf(p)) && (!pages.has(p.id) || modOf(p) > modOf(pages.get(p.id))))));
+    const dels = (changes.deletedPages || []).filter(id => !dirty.has(id) && unchanged(id) &&
+      (replace || !pages.has(id) || (changes.tomb && changes.tomb['p:' + id] >= modOf(pages.get(id)))));
+    const beforePages = new Map();
+    const remember = id => beforePages.set(id, JSON.stringify(pages.get(id)));
+    puts.forEach(p => remember(p.id)); dels.forEach(remember);
+    if (replace) pages.forEach((_, id) => remember(id));
+    const images = changes.images || [], deletedImages = changes.deletedImages || [];
+    const initialTomb = JSON.stringify(S.settings.tomb || {});
+    const settings = replace || changes.tomb !== undefined ? JSON.parse(JSON.stringify(S.settings)) : null;
+    if (settings) {
+      if (replace) Object.assign(settings, { recent: [], inboxId: null, ideasId: null, seedAt: 0 });
+      settings.tomb = JSON.parse(JSON.stringify(changes.tomb === undefined ? (replace ? {} : S.settings.tomb || {}) : changes.tomb));
+      // A permanent local deletion may have finished during folder preflight.
+      // Keep its marker even though it is no longer in the page map or dirty.
+      if (!replace) for (const key of Object.keys(localTomb)) {
+        if (!changes.expectedTomb || localTomb[key] !== changes.expectedTomb[key]) {
+          settings.tomb[key] = Math.max(settings.tomb[key] || 0, localTomb[key]);
+        }
+      }
+    }
+    // Nothing in memory or the visible editor changes until every database
+    // write commits. A full/failed image store cannot expose half a notebook.
+    if (!memoryOnly) await db.syncBatch({ pages: puts, deletedPages: dels, images, deletedImages, replace, settings });
+    const changed = new Set();
+    const canPublish = id => beforePages.has(id) && !dirty.has(id) && JSON.stringify(pages.get(id)) === beforePages.get(id);
+    const protectedPages = new Set();
+    if (replace) {
+      for (const id of Array.from(pages.keys())) {
+        if (canPublish(id)) { pages.delete(id); changed.add(id); }
+        else protectedPages.add(id);
+      }
+      if (memoryOnly) memBlobs.clear();
+    }
+    // A user may edit while IndexedDB is committing. Keep that live edit;
+    // autosave will write it after this already-queued transaction.
+    for (const id of dels) {
+      if (canPublish(id) || (replace && changed.has(id))) { if (pages.delete(id)) changed.add(id); }
+      else protectedPages.add(id);
+    }
+    for (const page of puts) {
+      if (!protectedPages.has(page.id) && (canPublish(page.id) || (replace && changed.has(page.id)))) { pages.set(page.id, page); changed.add(page.id); }
+      else protectedPages.add(page.id);
+    }
+    // An autosave may already have cleared dirty while this transaction was
+    // committing. Requeue any concurrent edit/deletion after the remote write.
+    protectedPages.forEach(id => markDirty(id, true));
+    if (memoryOnly) {
+      for (const id of deletedImages) memBlobs.delete(id);
+      for (const image of images) memBlobs.set(image.id, image);
+    }
+    if (settings) {
+      const tomb = settings.tomb;
+      if (initialTomb !== JSON.stringify(S.settings.tomb || {})) {
+        for (const key of Object.keys(S.settings.tomb || {})) tomb[key] = Math.max(tomb[key] || 0, S.settings.tomb[key]);
+      }
+      S.settings.tomb = tomb;
+      if (replace) Object.assign(S.settings, { recent: [], inboxId: null, ideasId: null, seedAt: 0 });
+      // Preserve display/settings edits made while the transaction committed.
+      if (JSON.stringify(S.settings) !== JSON.stringify(settings)) saveSettings();
+    }
+    const imageIds = new Set(deletedImages.concat(images.map(image => image.id)));
+    if (replace) { blobURLs.forEach((_, id) => imageIds.add(id)); blobVersions.forEach((_, id) => imageIds.add(id)); }
+    imageIds.forEach(invalidateBlob);
+    refreshImages(imageIds);
+    kidIndex = null;
+    if (imageIds.size || replace) emit('blobs', Array.from(imageIds));
+    if (changed.size) {
+      emit('tree');
+      if (puts.length) emit('content', puts[0]);
+      emit('external', Array.from(changed));
+    }
+    return Array.from(changed);
+  }); }
+  function putBlobRecord(rec) { return localImageWork(async () => {
     if (memoryOnly) memBlobs.set(rec.id, rec); else await db.put('blobs', rec);
-    const url = blobURLs.get(rec.id);
-    if (url) { URL.revokeObjectURL(url); blobURLs.delete(rec.id); }
+    invalidateBlob(rec.id);
+    refreshImages(new Set([rec.id]));
     emit('blobs');
   }); }
   /* forget everything stored on this PC (used when this PC takes over the notebook found in a sync folder) */
@@ -395,7 +500,7 @@
   }
 
   /* ---------- images ---------- */
-  function addImage(blob, meta) { return trackDataWork(async () => {
+  function addImage(blob, meta) { return localImageWork(async () => {
     const size = await U.imageSize(blob);
     const rec = Object.assign({
       id: U.uid(), blob, mime: blob.type || 'image/png', size: blob.size,
@@ -414,42 +519,58 @@
   async function blobURL(id) {
     if (!id) return null;
     if (blobURLs.has(id)) return blobURLs.get(id);
+    const version = blobVersions.get(id) || 0;
     const rec = await getBlob(id);
+    if (version !== (blobVersions.get(id) || 0)) return blobURL(id);
     if (!rec || !rec.blob) return null;
     if (blobURLs.has(id)) return blobURLs.get(id);
     const url = URL.createObjectURL(rec.blob);
     blobURLs.set(id, url);
     return url;
   }
+  function invalidateBlob(id) {
+    blobVersions.set(id, (blobVersions.get(id) || 0) + 1);
+    const url = blobURLs.get(id);
+    if (url) { URL.revokeObjectURL(url); blobURLs.delete(id); }
+  }
+  function refreshImages(ids) {
+    if (!document.querySelectorAll) return;
+    document.querySelectorAll('img[data-blob]').forEach(img => {
+      if (ids.has(img.dataset.blob)) setImg(img, img.dataset.blob);
+    });
+  }
   async function listBlobs() {
     const all = memoryOnly ? Array.from(memBlobs.values()) : await db.all('blobs').catch(() => []);
     return all.sort((a, b) => b.created - a.created);
   }
   /* o.remote = the deletion arrived from another PC through sync, so it is not recorded again */
-  function delBlob(id, o) { return trackDataWork(async () => {
+  function delBlob(id, o) { return localImageWork(async () => {
     if (memoryOnly) memBlobs.delete(id); else await db.del('blobs', id);
     if (!(o && o.remote)) { S.settings.tomb['i:' + id] = Date.now(); saveSettings(); }
-    const url = blobURLs.get(id);
-    if (url) { URL.revokeObjectURL(url); blobURLs.delete(id); }
+    invalidateBlob(id);
+    refreshImages(new Set([id]));
     emit('blobs');
   }); }
-  function updateBlob(id, patch) { return trackDataWork(async () => {
+  function updateBlob(id, patch) { return localImageWork(async () => {
     const rec = await getBlob(id);
     if (!rec) return null;
     Object.assign(rec, patch, { mod: Date.now() });
     if (memoryOnly) memBlobs.set(id, rec); else await db.put('blobs', rec);
-    if ('blob' in patch) { const url = blobURLs.get(id); if (url) { URL.revokeObjectURL(url); blobURLs.delete(id); } }
+    if ('blob' in patch) { invalidateBlob(id); refreshImages(new Set([id])); }
     emit('blobs');
     return rec;
   }); }
 
-  /* fill an <img> from an image id; marks it .missing when the image was deleted */
+  /* Refresh photos without rebuilding the editor or disturbing text selection. */
   function setImg(img, id) {
+    const previous = imageBindings.get(img);
+    const binding = { alt: previous && img.classList.contains('missing') ? previous.alt : img.alt };
+    imageBindings.set(img, binding);
     img.dataset.blob = id || '';
     blobURL(id).then(url => {
-      if (img.dataset.blob !== (id || '')) return;
-      if (url) { img.src = url; img.classList.remove('missing'); }
-      else { img.removeAttribute('src'); img.classList.add('missing'); img.alt = 'This image was deleted'; }
+      if (imageBindings.get(img) !== binding || img.dataset.blob !== (id || '')) return;
+      if (url) { img.src = url; img.classList.remove('missing'); img.alt = binding.alt; }
+      else { img.removeAttribute('src'); img.classList.add('missing'); img.alt = 'This picture is not available yet. Sync the source folder to load it.'; }
     });
     return img;
   }
@@ -462,7 +583,8 @@
     get, children, notebooks, isLive, live, path, notebookOf, descendants, trashed, ensureNotebook,
     create, update, touch, trash, restore, purge, move, duplicate, visit,
     addImage, getBlob, blobURL, listBlobs, delBlob, updateBlob, setImg,
-    applyRemote, putBlobRecord, wipeLocal,
+    applyRemote, applySyncSnapshot, putBlobRecord, wipeLocal,
+    imageRevision: () => imageRevision,
     isDirty: id => dirty.has(id),
     hasUnsaved: () => dirty.size > 0
   });

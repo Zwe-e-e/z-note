@@ -51,6 +51,16 @@
     batch: (store, puts, dels) => tx(store, 'readwrite', s => {
       (puts || []).forEach(v => s.put(v));
       (dels || []).forEach(k => s.delete(k));
+    }),
+    /* A folder pull becomes visible as one complete notebook, including photos. */
+    syncBatch: changes => tx(changes.settings ? ['pages', 'blobs', 'meta'] : ['pages', 'blobs'], 'readwrite', t => {
+      const pages = t.objectStore('pages'), images = t.objectStore('blobs');
+      if (changes.replace) { pages.clear(); images.clear(); }
+      (changes.deletedPages || []).forEach(id => pages.delete(id));
+      (changes.pages || []).forEach(page => pages.put(page));
+      (changes.deletedImages || []).forEach(id => images.delete(id));
+      (changes.images || []).forEach(image => images.put(image));
+      if (changes.settings) t.objectStore('meta').put(changes.settings, 'settings');
     })
   };
 })();
