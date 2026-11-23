@@ -90,33 +90,36 @@ GitHub release. Internet access is needed only for the check and download.
 If the check fails, retry later or use the official releases page. Your notes,
 pictures and source-folder path are not sent to GitHub.
 
-AUTOMATIC UPDATES ON WINDOWS
-The 2.5.0 automatic update uses a package compatible with older launchers.
-Keep using your existing shortcut or "Open Z Note.cmd" after updating.
-The full portable download includes the new "Z Note.exe" icon launcher.
-Open "Z Note.exe" (or "Open Z Note.cmd" on older versions). When a newer release is available,
-click "Install update automatically". Close other Z Note windows and keep
-this window open while it works. Z Note saves a recovery backup on your PC
-and shows the full backup path, checks the official download, replaces the
-app files in the same location, and reloads after installation finishes.
-Your notes, pictures, source-folder connection and settings are kept.
+ONE-TIME UPDATE FROM v2.4.2 OR EARLIER
+Z Note has moved to Zwe-e-e/z-note on GitHub. Already-installed older versions
+cannot install from the new address automatically. Download the update ZIP:
+https://github.com/Zwe-e-e/z-note/releases/download/v2.5.0/Z-Note-v2.5.0-Portable.zip
+
+1. Save a backup from Style & data > Sync & backup. Confirm the JSON file
+   has finished saving before continuing.
+2. Close all Z Note windows and extract the update ZIP into a separate folder.
+3. Copy the application files from its "Z Note" folder into your original
+   Z Note app folder, replacing matching program files. Keep "Z Note notebook"
+   and all backups. Do not delete your original folder.
+4. Reopen through your existing shortcut or "Open Z Note.cmd", using the same
+   folder and browser profile. Check your notes and source-folder settings.
+
+The update ZIP keeps the existing launcher. The full portable download adds
+the new "Z Note.exe" icon launcher and is the usual choice for a new installation.
+Use the new download page: https://zwe-e-e.github.io/z-note/
+The old GitHub Pages address does not redirect to the new page.
+
+AUTOMATIC UPDATES ON WINDOWS FROM v2.5.0
+Open "Z Note.exe" or "Open Z Note.cmd". Later releases from the new repository
+can use "Check for updates" > "Install update automatically". Close other
+Z Note windows and keep this window open while it works. Z Note saves a recovery
+backup, shows its path, verifies the download and updates the application files
+in place. Notes, pictures, source-folder settings and display settings are kept.
 
 Keep the recovery backup until you have checked your notes. If the update
-result cannot be confirmed, follow the on-screen instruction to close Z Note
-and reopen "Z Note.exe" or "Open Z Note.cmd" so the launcher can finish recovery.
-
-ONE-TIME UPGRADE FROM OLDER VERSIONS / MANUAL UPDATES
-v2.3.0 and older need one manual update to v2.4.0 to get the new launcher.
-After that, future releases can use the automatic button. These manual steps
-also apply when opening the HTML directly or when the launcher is unavailable.
-1. Click "Download a backup first". Check that the JSON file has finished saving
-   on your PC, then tick the backup confirmation and download the update ZIP.
-2. Close all Z Note windows and extract the ZIP into a separate folder.
-3. Copy the new app files into your original Z Note app folder, replacing
-   matching app files. Keep "Z Note notebook" and your backups. Do not delete
-   your original Z Note folder to install the update.
-4. Reopen from the same location using the same browser profile. Check your
-   pages and pictures before removing any old copies or backups.
+result cannot be confirmed, follow the instruction to close and reopen the
+launcher so recovery can finish. The manual copy steps above also work when
+opening the HTML directly or when the launcher is unavailable.
 
 Keep the same app location and browser profile to retain notes and folder
 settings. If you choose a new app location, use "Open existing notebook"

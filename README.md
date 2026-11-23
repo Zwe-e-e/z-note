@@ -1,6 +1,6 @@
 # Z Note
 
-**Current release: [v2.5.0](https://github.com/ZweWH/z-note/releases/tag/v2.5.0)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
+**Current release: [v2.5.0](https://github.com/Zwe-e-e/z-note/releases/tag/v2.5.0)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
 
 **New in v2.5.0:** A/B/C task priorities with a remembered one- or three-column view, tasks from every list together, sticky-note alignment guides, and the blue Z-icon portable launcher. Existing notes, task content and stored priorities remain unchanged until you edit them. The notebook format stays compatible.
 
@@ -8,7 +8,7 @@ Your installed version appears at the bottom of the app sidebar and in the **Sty
 
 A portable notebook you download to your PC and open in your own browser. Notes, tasks, boards, screen snips, themes, local folder saving and Keep Awake are included.
 
-**[Download page](https://zwewh.github.io/z-note/)** · **[Download Z Note Portable ZIP](https://zwewh.github.io/z-note/downloads/Z-Note-Portable.zip)**
+**[Download page](https://zwe-e-e.github.io/z-note/)** · **[Download Z Note Portable ZIP](https://zwe-e-e.github.io/z-note/downloads/Z-Note-Portable.zip)**
 
 ## Download and start
 
@@ -59,18 +59,18 @@ The local app and the previously hosted app use separate browser storage. To tra
 
 Click **Check for updates** in the sidebar, or open **Style & data → Updates**. The check contacts the public Z Note GitHub repository only when you request it. It compares your installed version with the latest stable release and shows whether an update is available. If you are offline or GitHub cannot be reached, retry later or open the official releases page.
 
-With **v2.4.0 or later**, open Z Note through **Z Note.exe** or **Open Z Note.cmd** on Windows. When a newer version is available, click **Install update automatically**. Close other Z Note windows and keep this window open until the update finishes. Z Note saves a recovery backup on your PC, shows its full path, verifies the official download, replaces the app files in the same location, and reloads. Your notes, pictures, source-folder connection and display settings stay in place. No manual ZIP replacement or saved-backup checkbox is needed for this route.
+**One-time update from v2.4.2 or earlier:** Z Note has moved to **Zwe-e-e/z-note** on GitHub. Already-installed older versions cannot install from the new address automatically. Use the [v2.5.0 update ZIP](https://github.com/Zwe-e-e/z-note/releases/download/v2.5.0/Z-Note-v2.5.0-Portable.zip) from the new release:
 
-Automatic installation requires working browser storage and the Windows launcher. If the update result cannot be confirmed, follow the on-screen instruction to close and reopen **Z Note.exe** or **Open Z Note.cmd** so recovery can finish. Keep the recovery backup until you have checked your notebook.
+1. Save a backup from **Style & data → Sync & backup** and confirm the JSON file has finished saving.
+2. Download the update ZIP, close all Z Note windows, and extract it into a separate temporary folder.
+3. Copy the application files from its **Z Note** folder into your original **Z Note** app folder, replacing matching program files. Keep **Z Note notebook** and all backups. Do not delete the original folder.
+4. Reopen through your existing shortcut or **Open Z Note.cmd**, using the same location and browser profile. Check that your notes and source-folder settings are present.
 
-The v2.5.0 automatic update uses a package compatible with older Windows launchers. Continue opening it through your existing shortcut or **Open Z Note.cmd**. The full portable download includes the new **Z Note.exe** icon launcher; either route provides the same task, board and Keep Awake features.
+This update ZIP keeps the existing launcher. For a new installation with the blue **Z Note.exe** icon, use the full [portable download](https://zwe-e-e.github.io/z-note/downloads/Z-Note-Portable.zip). Both packages include the same note, task and board features. Use the [new download page](https://zwe-e-e.github.io/z-note/); the old GitHub Pages address does not redirect.
 
-**Upgrading from v2.3.0 or earlier requires one manual update to v2.4.0.** This adds the new Windows launcher; future releases can install from the button. The manual steps also remain available when opening the HTML directly or when the launcher cannot connect:
+**From v2.5.0 onward**, open **Z Note.exe** or **Open Z Note.cmd** on Windows and use **Check for updates → Install update automatically** for later releases from the new repository. Close other Z Note windows and keep this window open while it works. Z Note saves a recovery backup, shows its path, verifies the download, updates application files in place, and reloads. Your notes, pictures, source-folder connection and display settings stay in place.
 
-1. Click **Download a backup first** and confirm the JSON file has finished saving on your PC. Only then tick the backup confirmation and download the update ZIP.
-2. Close all Z Note windows. Extract the ZIP into a separate temporary folder.
-3. Copy the new application files into your original **Z Note** app folder, replacing the matching app files. Keep your existing **Z Note notebook** folder and all backups; do not delete the original folder to install the update.
-4. Reopen Z Note from the same location with the same browser profile. Check that your pages and pictures are present before removing any old copies or backups.
+Automatic installation requires working browser storage and the Windows launcher. If the result cannot be confirmed, follow the instruction to close and reopen the launcher so recovery can finish. Keep the recovery backup until you have checked your notebook. The manual copy steps above also remain available when opening the HTML directly or when the launcher cannot connect.
 
 Keeping the same app location and browser profile retains browser notes and folder settings. If you choose a new app location or another PC, use **Open existing notebook…** to reconnect **Z Note notebook** or its parent. For notes kept only in browser storage, restore the saved JSON backup through **Restore from a file… → Add to my notebook**. Browser storage and folder permissions do not travel with a copied application folder.
 
@@ -124,6 +124,6 @@ powershell -NoProfile -File tests/test-package.ps1
 
 The packaging script includes only the app, launcher and quick guide, and verifies the archive contents. Personal notebooks, exported backups and credentials must never be published. `.gitignore` excludes standard notebook and backup paths; only the curated portable ZIP is allowed.
 
-For v2.5.0, publish the full 38-file `downloads/Z-Note-Portable.zip` through Pages. `-LegacyUpdater` builds the 37-file `downloads/Z-Note-v2.5.0-Portable.zip` with the previous file layout and the updated helper, for existing v2.4.2 installations. Attach only that compatibility ZIP under an updater-recognized name on the GitHub release. If also attaching the full icon download, name it `Z-Note-v2.5.0-With-Icon.zip`; old clients accept either the versioned Portable name or `Z-Note-Portable.zip` and choose the first match, so the full ZIP must not use either name among the release attachments. The new helper accepts both formats; a compatibility update preserves any existing launcher, and older installations continue opening through their existing launcher.
+For v2.5.0, publish the full 38-file `downloads/Z-Note-Portable.zip` through Pages. `-LegacyUpdater` builds the 37-file `downloads/Z-Note-v2.5.0-Portable.zip` with the previous file layout and the updated helper. This is the manual migration package for existing installations: its archive layout is compatible, but installed v2.4.2 clients cannot automatically follow the repository-owner change. Attach that versioned ZIP to the GitHub release. If also attaching the full icon download, name it `Z-Note-v2.5.0-With-Icon.zip` to keep the two routes distinct. The v2.5.0 helper accepts both layouts and uses the new repository for future automatic updates. The migration package preserves any existing launcher; the full download includes the new icon launcher.
 
 GitHub Pages publishes the `main` branch, repository root. Rebuild the ZIP whenever application files change so the download matches the source.

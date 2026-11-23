@@ -9,8 +9,9 @@
 - Drag tasks between priorities, or use the priority selector. Changes on the main Tasks page update the original task while keeping it in its source list. Individual lists also support reordering.
 - Leave existing tasks unchanged until the user edits them. Switching views does not change task content, order, dates or stored priorities; existing flags appear as High and unassigned tasks appear as Medium in the three-column view.
 - Add tasks directly to a chosen priority; keep completed tasks together below the columns.
+- Move the public repository to **Zwe-e-e/z-note** and the download page to **zwe-e-e.github.io/z-note**. Installed v2.4.2 and earlier versions need one manual update from the new release; v2.5.0 uses the new repository for future automatic updates.
 
-The notebook format and source-folder settings remain compatible. Existing task content and stored priorities are preserved until the user changes them. A separate compatible update package keeps automatic updates available to older Windows launchers; the full portable download includes the new Z-icon launcher.
+The notebook format and source-folder settings remain compatible. Existing task content and stored priorities are preserved until the user changes them. To migrate an older installation, back up first, close Z Note and copy the update ZIP's application files into the existing app folder, replacing program files while keeping the notebook folder and backups. Do not delete the original folder. The update ZIP keeps the existing launcher; the full portable download includes the new Z-icon launcher.
 
 ## v2.4.2 — 2026-11-23
 
