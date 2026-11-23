@@ -1,5 +1,12 @@
 # Z Note release history
 
+## v2.2.1 — 2026-11-23
+
+- Show the installed version at the bottom of the app sidebar and in the Style & data title.
+- Embed the version from `VERSION.txt` when packaging so the display works offline and matches the portable download.
+
+The notebook format and Windows helper are unchanged from v2.2.0.
+
 ## v2.2.0 — 2026-11-23
 
 This release packages the recent portable-app improvements as the first tagged public GitHub release.

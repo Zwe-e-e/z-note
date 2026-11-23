@@ -150,7 +150,8 @@
       h('div.side-foot',
         ZN.sourceFolder ? ZN.sourceFolder.button() : null,
         navRow('trash', 'trash', 'Trash'),
-        h('button.row.nav-row', { type: 'button', 'data-act': 'style' }, h('span.row-icon', ZN.icon('palette', 17)), h('span.row-title', 'Style & data'))));
+        h('button.row.nav-row', { type: 'button', 'data-act': 'style' }, h('span.row-icon', ZN.icon('palette', 17)), h('span.row-title', 'Style & data')),
+        ZN.version ? h('div.app-version', { 'aria-label': 'Z Note version ' + ZN.version }, 'Z Note v' + ZN.version) : null));
     scroll.scrollTop = top;
     markActive();
   }

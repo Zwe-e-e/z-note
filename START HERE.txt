@@ -1,5 +1,6 @@
 Z NOTE - PORTABLE BROWSER APP
-Version 2.2.0 - released 23 November 2026
+Version 2.2.1 - released 23 November 2026
+Check your installed version at the bottom of the sidebar or in Style & data.
 
 GET STARTED
 1. Extract the ZIP completely. Keep the whole "Z Note" folder together.

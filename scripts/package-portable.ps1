@@ -13,6 +13,11 @@ $outputPath = Join-Path $outputDirectory 'Z-Note-Portable.zip'
 $version = [IO.File]::ReadAllText((Join-Path $projectRoot 'VERSION.txt')).Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'VERSION.txt must contain an app release version such as 2.2.0.' }
 
+# Embed the release version for offline file:// use; VERSION.txt is the source
+# of truth. The app never needs to fetch a file or contact a server for it.
+$versionScript = "/* Generated from VERSION.txt by scripts/package-portable.ps1. */`nwindow.ZN.version = '$version';`n"
+[IO.File]::WriteAllText((Join-Path $projectRoot 'app/js/version.js'), $versionScript, [Text.UTF8Encoding]::new($false))
+
 # Add new runtime assets explicitly here after review. Never package app data,
 # backup exports, development configuration, or files selected by a wildcard.
 [string[]]$files = @(
@@ -49,6 +54,7 @@ if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'VERSION.txt must contain an a
     'app/js/todo.js'
     'app/js/ui.js'
     'app/js/util.js'
+    'app/js/version.js'
     'app/native/ZNoteHost.exe'
 )
 [Array]::Sort($files, [StringComparer]::Ordinal)

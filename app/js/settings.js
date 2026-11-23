@@ -270,7 +270,7 @@
       U.clear(body).append(panes[id][1]());
     };
     Object.keys(panes).forEach(id => tabs.append(h('button.tab', { type: 'button', role: 'tab', dataset: { id }, onclick: () => show(id) }, panes[id][0])));
-    panel = ui.modal({ title: 'Style & data', width: 640, body: [tabs, body], onClose: () => { panel = null; } });
+    panel = ui.modal({ title: 'Style & data' + (ZN.version ? ' · v' + ZN.version : ''), width: 640, body: [tabs, body], onClose: () => { panel = null; } });
     show(panes[tab] ? tab : 'style');
   }
 
