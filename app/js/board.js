@@ -200,6 +200,60 @@
     return { a: A ? clipPoint(A, fb.x, fb.y) : fa, b: B ? clipPoint(B, fa.x, fa.y) : fb };
   }
 
+  /* Sticky notes align to nearby notes without changing their relative positions in a group.
+     Both the capture tolerance and neighbour range are measured on screen, at any zoom. */
+  function snapStickyMove(moving, targets, dx, dy, zoom, options = {}) {
+    const result = { dx, dy, guides: [] };
+    if (options.disabled) return result;
+    const k = typeof zoom === 'number' && isFinite(zoom) && zoom > 0 ? zoom : 1;
+    const tolerance = 8 / k, range = 240 / k;
+    const valid = it => it && it.kind === 'sticky' &&
+      [it.x, it.y, it.w, it.h].every(n => typeof n === 'number' && isFinite(n)) && it.w > 0 && it.h > 0;
+    const ids = new Set(moving.map(it => it && it.id));
+    const sources = moving.filter(valid), neighbours = targets.filter(it => valid(it) && !ids.has(it.id));
+    const best = { x: null, y: null };
+    const better = (a, b) => {
+      if (!b) return true;
+      for (const key of ['gap', 'correction', 'distance']) {
+        if (Math.abs(a[key] - b[key]) > 1e-9) return a[key] < b[key];
+      }
+      return a.key < b.key;
+    };
+    for (const source of sources) {
+      const x = source.x + dx, y = source.y + dy;
+      for (const target of neighbours) {
+        const gap = Math.hypot(Math.max(0, target.x - x - source.w, x - target.x - target.w),
+          Math.max(0, target.y - y - source.h, y - target.y - target.h));
+        if (gap > range) continue;
+        const distance = Math.hypot(x + source.w / 2 - target.x - target.w / 2,
+          y + source.h / 2 - target.y - target.h / 2);
+        for (const axis of ['x', 'y']) {
+          if (options.axis && options.axis !== axis) continue;
+          const sizeKey = axis === 'x' ? 'w' : 'h', start = axis === 'x' ? x : y;
+          for (const anchor of [0, 0.5, 1]) {
+            const value = target[axis] + target[sizeKey] * anchor;
+            const delta = value - start - source[sizeKey] * anchor;
+            if (Math.abs(delta) > tolerance + 1e-9) continue;
+            const candidate = { source, target, value, delta, gap, correction: Math.abs(delta), distance,
+              key: String(target.id) + ':' + String(source.id) + ':' + anchor };
+            if (better(candidate, best[axis])) best[axis] = candidate;
+          }
+        }
+      }
+    }
+    if (best.x) result.dx += best.x.delta;
+    if (best.y) result.dy += best.y.delta;
+    for (const axis of ['x', 'y']) {
+      const match = best[axis];
+      if (!match) continue;
+      const across = axis === 'x' ? 'y' : 'x', span = axis === 'x' ? 'h' : 'w';
+      const start = match.source[across] + (axis === 'x' ? result.dy : result.dx);
+      result.guides.push({ axis, value: match.value, from: Math.min(start, match.target[across]),
+        to: Math.max(start + match.source[span], match.target[across] + match.target[span]), targetId: match.target.id });
+    }
+    return result;
+  }
+
   /* make loaded / pasted items safe to draw (drops what it cannot understand) */
   function sanitize(list) {
     const ids = {};
@@ -238,7 +292,7 @@
     });
     return out.join('\n');
   }
-  ZN.board = { textOf };
+  ZN.board = { textOf, snapStickyMove };
 
   /* ============================================================ the view ============================================================ */
   ZN.views.board = function (el, page) {
@@ -258,15 +312,18 @@
     let tool = 'select', sel = new Set(), editing = null, gesture = null;
     let spaceDown = false, alive = true, selRect = null, fitRaf = 0;
     let lastClick = { t: 0, x: 0, y: 0, id: null };
+    let snapGuides = [];
 
     /* ---------- furniture ---------- */
     el.classList.add('fill');
     const world = h('div.b-world');
     const selLayer = h('div.b-sel');
+    const snapLayer = h('div.b-snap-guides', { 'aria-hidden': 'true' });
     const attachEl = h('div.b-attach', { hidden: true });
     const marqueeEl = h('div.b-marquee', { hidden: true });
     const eraserEl = h('div.b-eraser', { hidden: true });
-    const overlay = h('div.b-overlay', selLayer, attachEl, marqueeEl, eraserEl);
+    const overlay = h('div.b-overlay', selLayer, snapLayer, attachEl, marqueeEl, eraserEl);
+    const snapHint = h('div.b-snap-hint', { hidden: true }, 'Aligns with nearby notes · Ctrl / ⌘: move freely');
     const hint = h('div.b-hint', { hidden: true },
       h('b', 'Double-click anywhere to drop a sticky note'),
       h('span', 'Pick a tool on the left, or paste a screenshot with Ctrl + V'));
@@ -278,7 +335,7 @@
     const zoomEl = h('div.b-zoom.b-ui', { role: 'toolbar', 'aria-label': 'Undo and zoom' });
     const optsEl = h('div.b-opts.b-ui', { hidden: true });
     const propsEl = h('div.b-props.b-ui', { hidden: true, role: 'toolbar', 'aria-label': 'Selection' });
-    const board = h('div.board', { tabindex: '-1', 'data-tool': 'select' }, world, overlay, hint, titleChip, toolsEl, zoomEl, optsEl, propsEl);
+    const board = h('div.board', { tabindex: '-1', 'data-tool': 'select' }, world, overlay, hint, titleChip, toolsEl, zoomEl, optsEl, propsEl, snapHint);
     el.appendChild(board);
 
     function barBtn(icon, label, key, side, fn) {
@@ -603,8 +660,10 @@
     const px = (l, t, w, hh) => ({ left: f1(l) + 'px', top: f1(t) + 'px', width: w == null ? null : f1(w) + 'px', height: hh == null ? null : f1(hh) + 'px' });
 
     function layoutOverlay() {
+      layoutSnapGuides();
       U.clear(selLayer);
       const list = selItems();
+      snapHint.hidden = tool !== 'select' || !!editing || !list.some(it => it.kind === 'sticky');
       if (!list.length) { selRect = null; return; }
       const many = list.length > 1, boxes = list.length <= 60;
       let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
@@ -633,6 +692,19 @@
       selRect = { l: x1, t: y1, r: x2, b: y2 };
       placeProps();
     }
+    function layoutSnapGuides() {
+      U.clear(snapLayer);
+      snapGuides.forEach(g => {
+        const vertical = g.axis === 'x';
+        const pos = g.value * view.k + (vertical ? view.x : view.y);
+        const start = g.from * view.k + (vertical ? view.y : view.x) - 8;
+        const length = (g.to - g.from) * view.k + 16;
+        snapLayer.appendChild(h('div.b-snap-guide.' + (vertical ? 'vertical' : 'horizontal'), {
+          style: vertical ? px(pos, start, 0, length) : px(start, pos, length, 0)
+        }));
+      });
+    }
+    function clearSnapGuides() { snapGuides = []; U.clear(snapLayer); }
     function placeProps() {
       if (propsEl.hidden || !selRect) return;
       const s = size(), pw = propsEl.offsetWidth, ph = propsEl.offsetHeight;
@@ -769,6 +841,7 @@
       if (t !== 'select' && t !== 'hand' && sel.size) select([]);
       if (t !== 'eraser') eraserEl.hidden = true;
       buildOpts();
+      layoutOverlay();
     }
 
     /* ---------- history ---------- */
@@ -1040,6 +1113,7 @@
 
     /* ---------- gestures ---------- */
     function begin(e, g) {
+      clearSnapGuides();
       gesture = g;
       try { board.setPointerCapture(e.pointerId); } catch (err) { /* synthetic events have no capture */ }
       if (g.busy !== false) board.classList.add('busy');
@@ -1074,6 +1148,7 @@
 
     function moveGesture(e, p0, hit, wasSelected) {
       let moved = false, ids = null, orig = null, lines = null;
+      let movingNotes = [], nearbyNotes = [];
       return {
         move(ev, p) {
           if (!moved) {
@@ -1089,16 +1164,23 @@
               const it = get(id);
               if (it) orig.set(id, it.kind === 'line' ? { a: Object.assign({}, it.a), b: Object.assign({}, it.b) } : { x: it.x, y: it.y });
             });
+            const geometry = it => ({ id: it.id, kind: it.kind, x: it.x, y: it.y, w: it.w, h: it.h });
+            movingNotes = items.filter(it => it.kind === 'sticky' && ids.has(it.id)).map(geometry);
+            nearbyNotes = items.filter(it => it.kind === 'sticky' && !ids.has(it.id)).map(geometry);
             lines = new Set();
             items.forEach(l => { if (l.kind === 'line' && (ids.has(l.id) || (l.a.id && ids.has(l.a.id)) || (l.b.id && ids.has(l.b.id)))) lines.add(l.id); });
           }
           let dx = (p.sx - p0.sx) / view.k, dy = (p.sy - p0.sy) / view.k;
-          if (ev.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
-          shift(ids, orig, dx, dy);
+          let axis;
+          if (ev.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) { dy = 0; axis = 'x'; } else { dx = 0; axis = 'y'; } }
+          const snapped = snapStickyMove(movingNotes, nearbyNotes, dx, dy, view.k, { axis, disabled: ev.ctrlKey || ev.metaKey });
+          snapGuides = snapped.guides;
+          shift(ids, orig, snapped.dx, snapped.dy);
           paintLines(lines);
           layoutOverlay();
         },
         end(ev, p) {
+          clearSnapGuides();
           if (moved) { commit(); afterSel(); return; }
           if (wasSelected && sel.size > 1) select([hit.id]);
           if (clicked(p, hit.id)) onDouble(hit);
@@ -1509,6 +1591,7 @@
       if (e.key === ' ' && spaceDown) { spaceDown = false; board.classList.remove('space'); }
     }
     function onBlur() {
+      clearSnapGuides();
       if (spaceDown) { spaceDown = false; board.classList.remove('space'); }
     }
 
@@ -1612,6 +1695,7 @@
       prepareExport,
       unmount() {
         prepareExport();
+        clearSnapGuides();
         alive = false;
         cancelAnimationFrame(fitRaf);
         ro.disconnect();

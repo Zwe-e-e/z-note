@@ -330,6 +330,117 @@
     return () => c.removeEventListener('pointerdown', down);
   };
 
+  /* ---------- drag between priority columns ----------
+     o: { container, column: selector, item: selector, handle: selector,
+          scroller?, onDrop(itemEl, beforeEl|null, columnEl) }
+     The model owns ordering. This only shows a target until a valid drop. */
+  ui.dragColumns = function (o) {
+    const c = o.container;
+    let cancel = null;
+    const inside = (r, x, y) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+
+    function down(e) {
+      if (cancel || e.button !== 0 || e.isPrimary === false) return;
+      const handle = e.target.closest && e.target.closest(o.handle);
+      const item = handle && handle.closest(o.item);
+      const source = item && item.closest(o.column);
+      if (!source || !c.contains(source) || !c.contains(handle)) return;
+      e.preventDefault();
+      const pointer = e.pointerId, sx = e.clientX, sy = e.clientY;
+      let active = false, line = null, column = null, before = null, timer = null;
+      let lastX = sx, lastY = sy;
+
+      function target(next) {
+        if (column === next) return;
+        if (column) column.classList.remove('drop-target');
+        column = next;
+        if (column) column.classList.add('drop-target');
+      }
+      function update() {
+        let next = null;
+        const inView = !o.scroller || inside(o.scroller.getBoundingClientRect(), lastX, lastY);
+        if (c.contains(item) && inView && inside(c.getBoundingClientRect(), lastX, lastY)) {
+          next = Array.from(c.querySelectorAll(o.column)).find(el =>
+            el.offsetParent !== null && inside(el.getBoundingClientRect(), lastX, lastY)) || null;
+        }
+        target(next);
+        before = null;
+        line.hidden = !column;
+        if (!column) return;
+        const items = Array.from(column.querySelectorAll(o.item)).filter(el => el !== item && el.offsetParent !== null);
+        before = items.find(el => { const r = el.getBoundingClientRect(); return lastY < r.top + r.height / 2; }) || null;
+        const cr = column.getBoundingClientRect();
+        const last = items[items.length - 1];
+        const y = before ? before.getBoundingClientRect().top : last ? last.getBoundingClientRect().bottom : cr.top + Math.min(56, cr.height / 2);
+        line.style.left = (cr.left + 10) + 'px';
+        line.style.width = Math.max(0, cr.width - 20) + 'px';
+        line.style.top = (y - 1) + 'px';
+      }
+      function cleanup() {
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', up);
+        document.removeEventListener('pointercancel', abortPointer);
+        document.removeEventListener('keydown', key, true);
+        window.removeEventListener('blur', abort);
+        clearInterval(timer);
+        item.classList.remove('dragging');
+        if (active) document.body.classList.remove('is-dragging');
+        target(null);
+        if (line) line.remove();
+        cancel = null;
+      }
+      function abort() { cleanup(); }
+      function abortPointer(ev) { if (ev.pointerId === pointer) cleanup(); }
+      function key(ev) {
+        if (ev.key !== 'Escape') return;
+        ev.preventDefault(); ev.stopPropagation(); cleanup();
+      }
+      function move(ev) {
+        if (ev.pointerId !== pointer) return;
+        lastX = ev.clientX; lastY = ev.clientY;
+        if (!active) {
+          if (Math.hypot(lastX - sx, lastY - sy) < 5) return;
+          active = true;
+          item.classList.add('dragging');
+          document.body.classList.add('is-dragging');
+          line = h('div.drop-line', { 'aria-hidden': 'true' });
+          layer().appendChild(line);
+          if (o.scroller) timer = setInterval(() => {
+            const sr = o.scroller.getBoundingClientRect();
+            if (!inside(sr, lastX, lastY)) return;
+            if (lastY < sr.top + 56) o.scroller.scrollTop -= 14;
+            else if (lastY > sr.bottom - 56) o.scroller.scrollTop += 14;
+            update();
+          }, 30);
+        }
+        ev.preventDefault();
+        update();
+      }
+      function up(ev) {
+        if (ev.pointerId !== pointer) return;
+        if (active) {
+          lastX = ev.clientX; lastY = ev.clientY;
+          update();
+        }
+        const destination = column, sibling = before;
+        const dropped = active && destination && c.contains(item);
+        cleanup();
+        if (dropped) o.onDrop(item, sibling, destination);
+      }
+      cancel = abort;
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', up);
+      document.addEventListener('pointercancel', abortPointer);
+      document.addEventListener('keydown', key, true);
+      window.addEventListener('blur', abort);
+    }
+    c.addEventListener('pointerdown', down);
+    return () => {
+      c.removeEventListener('pointerdown', down);
+      if (cancel) cancel();
+    };
+  };
+
   /* ---------- image viewer ---------- */
   ui.lightbox = async function (blobId) {
     const url = await ZN.store.blobURL(blobId);

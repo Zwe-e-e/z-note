@@ -22,7 +22,7 @@ namespace ZNote.NativeHost
         // Closed set: no notebook, browser state, source-folder handles, backup,
         // developer configuration, or arbitrary new archive path is writable.
         internal static readonly string[] Allowed = new string[] {
-            "VERSION.txt", "CHANGELOG.md", "Z Note.html", "Open Z Note.cmd", "START HERE.txt",
+            "VERSION.txt", "CHANGELOG.md", "Z Note.html", "Open Z Note.cmd", "START HERE.txt", "Z Note.exe",
             "app/css/board.css", "app/css/note.css", "app/css/shell.css", "app/css/snip.css", "app/css/theme.css", "app/css/todo.css",
             "app/img/icon.ico", "app/img/icon.png", "app/js/awake-native.js", "app/js/awake.js", "app/js/board.js", "app/js/db.js",
             "app/js/home.js", "app/js/icons.js", "app/js/main.js", "app/js/note.js", "app/js/search.js", "app/js/settings.js",
@@ -233,10 +233,11 @@ namespace ZNote.NativeHost
                     files.Add(relative);
                 }
             }
-            // Every current runtime component is required. A future package that
-            // changes this contract must ship a compatible updater first.
+            // The icon launcher is optional so this updater can also install a
+            // legacy-format package. Every existing runtime component remains
+            // required; no other new archive paths are permitted.
             foreach (string name in UpdateFiles.Allowed)
-                if (!names.Contains(name)) throw new InvalidDataException("The update package is missing " + name + ".");
+                if (name != "Z Note.exe" && !names.Contains(name)) throw new InvalidDataException("The update package is missing " + name + ".");
             if (File.ReadAllText(UpdateFiles.Under(stage, "VERSION.txt")).Trim() != expectedVersion) throw new InvalidDataException("The package version does not match the release.");
             string versionScript = File.ReadAllText(UpdateFiles.Under(stage, "app/js/version.js"));
             if (!versionScript.Contains("window.ZN.version = '" + expectedVersion + "';")) throw new InvalidDataException("The app version does not match the release.");
@@ -384,7 +385,7 @@ namespace ZNote.NativeHost
             {
                 IDictionary<string, object> data = UpdateFiles.Json(MaximumFrame).DeserializeObject(text) as IDictionary<string, object>;
                 if (data == null) throw new InvalidDataException("Invalid update message.");
-                if (!automatic) throw new InvalidOperationException("Automatic installation is disabled in this helper session. Open Z Note with Open Z Note.cmd.");
+                if (!automatic) throw new InvalidOperationException("Automatic installation is disabled in this helper session. Open Z Note with Z Note.exe or Open Z Note.cmd.");
                 string command = UpdateFiles.Text(data, "command");
                 if (command == "backup-begin") Begin(UpdateFiles.Integer(data, "bytes"));
                 else if (command == "backup-chunk") Chunk(UpdateFiles.Text(data, "data"));
@@ -433,7 +434,7 @@ namespace ZNote.NativeHost
         private void Install(string requested)
         {
             if (saved == null || !File.Exists(saved) || installed) throw new InvalidDataException("Save a complete notebook backup before installing an update.");
-            if (String.Equals(Path.GetFullPath(Process.GetCurrentProcess().MainModule.FileName), UpdateFiles.Under(root, "app/native/ZNoteHost.exe"), StringComparison.OrdinalIgnoreCase)) throw new IOException("Reopen Z Note through Open Z Note.cmd before installing updates.");
+            if (String.Equals(Path.GetFullPath(Process.GetCurrentProcess().MainModule.FileName), UpdateFiles.Under(root, "app/native/ZNoteHost.exe"), StringComparison.OrdinalIgnoreCase)) throw new IOException("Reopen Z Note through Z Note.exe or Open Z Note.cmd before installing updates.");
             UpdateFiles.CompareVersions(requested, "0.0.0");
             using (UpdateLock updateLock = new UpdateLock(root))
             {

@@ -2,7 +2,7 @@
 # Run from any directory: powershell -NoProfile -File scripts/package-portable.ps1
 # Fixed ordering and ZIP timestamps make identical inputs reproducible on the
 # same PowerShell/.NET runtime. No personal notebook or repository scan is used.
-param([string]$NativeHostPath)
+param([string]$NativeHostPath, [switch]$LegacyUpdater)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -11,9 +11,13 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $projectRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $outputDirectory = Join-Path $projectRoot 'downloads'
-$outputPath = Join-Path $outputDirectory 'Z-Note-Portable.zip'
 $version = [IO.File]::ReadAllText((Join-Path $projectRoot 'VERSION.txt')).Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'VERSION.txt must contain an app release version such as 2.2.0.' }
+# v2.4.2 helpers require their original archive layout. The versioned release
+# asset supports that updater transition; the full Pages download also has
+# the new icon launcher. Both contain exactly the same core application.
+$archiveName = if ($LegacyUpdater) { 'Z-Note-v' + $version + '-Portable.zip' } else { 'Z-Note-Portable.zip' }
+$outputPath = Join-Path $outputDirectory $archiveName
 
 # Embed the release version for offline file:// use; VERSION.txt is the source
 # of truth. The app never needs to fetch a file or contact a server for it.
@@ -26,6 +30,7 @@ $versionScript = "/* Generated from VERSION.txt by scripts/package-portable.ps1.
     'VERSION.txt'
     'CHANGELOG.md'
     'Z Note.html'
+    'Z Note.exe'
     'Open Z Note.cmd'
     'START HERE.txt'
     'app/css/board.css'
@@ -61,6 +66,7 @@ $versionScript = "/* Generated from VERSION.txt by scripts/package-portable.ps1.
     'app/js/version.js'
     'app/native/ZNoteHost.exe'
 )
+if ($LegacyUpdater) { $files = @($files | Where-Object { $_ -ne 'Z Note.exe' }) }
 [Array]::Sort($files, [StringComparer]::Ordinal)
 $allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 $sourcePaths = @{}
@@ -132,6 +138,7 @@ try {
 $result = Get-Item -LiteralPath $outputPath
 [pscustomobject]@{
     Version = $version
+    Format = if ($LegacyUpdater) { 'legacy-updater' } else { 'full-portable' }
     Archive = $result.FullName
     Files = $files.Count
     HtmlAssetsVerified = $assetCount

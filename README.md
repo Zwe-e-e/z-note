@@ -1,6 +1,8 @@
 # Z Note
 
-**Current release: [v2.4.2](https://github.com/ZweWH/z-note/releases/tag/v2.4.2)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
+**Current release: [v2.5.0](https://github.com/ZweWH/z-note/releases/tag/v2.5.0)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
+
+**New in v2.5.0:** A/B/C task priorities with a remembered one- or three-column view, tasks from every list together, sticky-note alignment guides, and the blue Z-icon portable launcher. Existing notes, task content and stored priorities remain unchanged until you edit them. The notebook format stays compatible.
 
 Your installed version appears at the bottom of the app sidebar and in the **Style & data** title. Use **Check for updates** in the sidebar, or **Style & data → Updates**, to check for a newer release.
 
@@ -12,14 +14,15 @@ A portable notebook you download to your PC and open in your own browser. Notes,
 
 1. Download **Z-Note-Portable.zip** and choose **Extract All**. Do not run the app from inside the ZIP.
 2. Save the extracted **Z Note** folder wherever you want on your PC.
-3. On Windows, double-click **Open Z Note.cmd**. It opens your own Chrome or Edge browser in a dedicated window and enables background Keep Awake and automatic app updates. You can also open **Z Note.html** directly, with visible-window Keep Awake and manual app updates.
+3. On Windows, double-click **Z Note.exe** (the blue Z icon). It opens your own Chrome or Edge browser in a dedicated window and enables background Keep Awake and automatic app updates. **Open Z Note.cmd** remains an alternative. You can also open **Z Note.html** directly, with visible-window Keep Awake and manual app updates.
 4. In the first-run dialog, click **Choose source folder** and select that extracted **Z Note** folder. Allow the browser to save files. The app creates a **Z Note notebook** subfolder for your pages and pictures. To reconnect notes from another PC, use **Open existing notebook…** and select **Z Note notebook** itself or its parent folder.
 
 No installer, account or development tools are needed. The extracted app works offline. Keep the `app` folder beside `Z Note.html`. The Windows launcher uses the .NET Framework included with Windows 10/11.
 
 ```text
 Z Note/
-  Open Z Note.cmd      ← Windows: background Keep Awake and automatic updates
+  Z Note.exe           ← blue Z icon: start here on Windows
+  Open Z Note.cmd      ← alternative Windows launcher
   Z Note.html          ← direct browser entry (visible-window Keep Awake)
   START HERE.txt
   app/
@@ -27,6 +30,8 @@ Z Note/
 ```
 
 Each person gets their own notebook. The shared download contains application files and generic starter examples only.
+
+Keep **Z Note.exe**, **Z Note.html** and the **app** folder together. The icon launcher finds the app beside itself, so the whole folder can move to another drive or PC. To add a desktop icon on that PC, right-click **Z Note.exe** and choose **Show more options → Send to → Desktop (create shortcut)**. A desktop shortcut belongs to that PC; the portable ZIP uses the launcher itself.
 
 ## Folder saving and backups
 
@@ -54,9 +59,11 @@ The local app and the previously hosted app use separate browser storage. To tra
 
 Click **Check for updates** in the sidebar, or open **Style & data → Updates**. The check contacts the public Z Note GitHub repository only when you request it. It compares your installed version with the latest stable release and shows whether an update is available. If you are offline or GitHub cannot be reached, retry later or open the official releases page.
 
-With **v2.4.0 or later**, open Z Note through **Open Z Note.cmd** on Windows. When a newer version is available, click **Install update automatically**. Close other Z Note windows and keep this window open until the update finishes. Z Note saves a recovery backup on your PC, shows its full path, verifies the official download, replaces the app files in the same location, and reloads. Your notes, pictures, source-folder connection and display settings stay in place. No manual ZIP replacement or saved-backup checkbox is needed for this route.
+With **v2.4.0 or later**, open Z Note through **Z Note.exe** or **Open Z Note.cmd** on Windows. When a newer version is available, click **Install update automatically**. Close other Z Note windows and keep this window open until the update finishes. Z Note saves a recovery backup on your PC, shows its full path, verifies the official download, replaces the app files in the same location, and reloads. Your notes, pictures, source-folder connection and display settings stay in place. No manual ZIP replacement or saved-backup checkbox is needed for this route.
 
-Automatic installation requires working browser storage and the Windows launcher. If the update result cannot be confirmed, follow the on-screen instruction to close and reopen **Open Z Note.cmd** so recovery can finish. Keep the recovery backup until you have checked your notebook.
+Automatic installation requires working browser storage and the Windows launcher. If the update result cannot be confirmed, follow the on-screen instruction to close and reopen **Z Note.exe** or **Open Z Note.cmd** so recovery can finish. Keep the recovery backup until you have checked your notebook.
+
+The v2.5.0 automatic update uses a package compatible with older Windows launchers. Continue opening it through your existing shortcut or **Open Z Note.cmd**. The full portable download includes the new **Z Note.exe** icon launcher; either route provides the same task, board and Keep Awake features.
 
 **Upgrading from v2.3.0 or earlier requires one manual update to v2.4.0.** This adds the new Windows launcher; future releases can install from the button. The manual steps also remain available when opening the HTML directly or when the launcher cannot connect:
 
@@ -75,7 +82,7 @@ Use desktop Chrome or Edge for direct folder access. Other browsers can use brow
 
 ## Keep Awake
 
-On Windows, open **Open Z Note.cmd**, then click **Keep Awake** beside **Snip**. **Awake on** means Windows is keeping the display and computer awake even when Z Note is minimized or covered by another app. Click again to stop. Closing or reloading that Z Note window releases the request; each new session starts off. It does not override manual sleep, locking, lid-close actions or Windows policy.
+On Windows, open **Z Note.exe** (or **Open Z Note.cmd**), then click **Keep Awake** beside **Snip**. **Awake on** means Windows is keeping the display and computer awake even when Z Note is minimized or covered by another app. Click again to stop. Closing or reloading that Z Note window releases the request; each new session starts off. It does not override manual sleep, locking, lid-close actions or Windows policy.
 
 Opening the HTML directly or using the hosted app provides browser-only mode: **Awake: visible**. That mode pauses when hidden. To get background support, download the current ZIP and reopen through the Windows launcher.
 
@@ -97,18 +104,26 @@ node --test tests/source-folder.test.cjs
 node --test tests/updates.test.cjs tests/update-native.test.cjs tests/backup.test.cjs
 node --test tests/sync.test.cjs tests/checkpoint.test.cjs tests/auto-update.test.cjs
 node --test tests/db-sync.test.cjs tests/store-sync.test.cjs
+node --test tests/todo-priority.test.cjs tests/main-tasks.test.cjs tests/drag-columns.test.cjs
+node --test tests/board-snap.test.cjs tests/board-snap-gesture.test.cjs
 ```
 
 To build and test the Windows helper, then rebuild the portable ZIP in PowerShell:
 
 ```powershell
 powershell -NoProfile -File scripts/build-native.ps1
+powershell -NoProfile -File scripts/build-launcher.ps1
+powershell -NoProfile -File tests/test-launcher.ps1
 powershell -NoProfile -File tests/test-native.ps1
 powershell -NoProfile -File tests/test-native-update.ps1
 node --test tests/native-awake.test.cjs
 powershell -NoProfile -File scripts/package-portable.ps1
+powershell -NoProfile -File scripts/package-portable.ps1 -LegacyUpdater
+powershell -NoProfile -File tests/test-package.ps1
 ```
 
 The packaging script includes only the app, launcher and quick guide, and verifies the archive contents. Personal notebooks, exported backups and credentials must never be published. `.gitignore` excludes standard notebook and backup paths; only the curated portable ZIP is allowed.
+
+For v2.5.0, publish the full 38-file `downloads/Z-Note-Portable.zip` through Pages. `-LegacyUpdater` builds the 37-file `downloads/Z-Note-v2.5.0-Portable.zip` with the previous file layout and the updated helper, for existing v2.4.2 installations. Attach only that compatibility ZIP under an updater-recognized name on the GitHub release. If also attaching the full icon download, name it `Z-Note-v2.5.0-With-Icon.zip`; old clients accept either the versioned Portable name or `Z-Note-Portable.zip` and choose the first match, so the full ZIP must not use either name among the release attachments. The new helper accepts both formats; a compatibility update preserves any existing launcher, and older installations continue opening through their existing launcher.
 
 GitHub Pages publishes the `main` branch, repository root. Rebuild the ZIP whenever application files change so the download matches the source.

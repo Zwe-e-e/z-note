@@ -109,7 +109,7 @@
         }
       } catch (e) {
         enabled = false;
-        if (!closing) report(e.message || 'Windows Keep Awake disconnected. Reopen Z Note with Open Z Note.cmd.');
+        if (!closing) report(e.message || 'Windows Keep Awake disconnected. Reopen Z Note with Z Note.exe (or Open Z Note.cmd).');
       } finally {
         pending = false;
         notify();
@@ -120,7 +120,7 @@
 
   function start() {
     if (closing) {
-      report('This Windows Keep Awake session has ended. Reopen Z Note with Open Z Note.cmd.');
+      report('This Windows Keep Awake session has ended. Reopen Z Note with Z Note.exe (or Open Z Note.cmd).');
       notify();
       return Promise.resolve();
     }
@@ -133,7 +133,7 @@
     error = '';
     if (!native && !explainedBrowser) {
       explainedBrowser = true;
-      ZN.ui.toast('Browser Keep Awake works only while Z Note is visible. For minimized use on Windows, download Z Note and open Open Z Note.cmd.', { ms: 10000 });
+      ZN.ui.toast('Browser Keep Awake works only while Z Note is visible. For minimized use on Windows, download Z Note and open Z Note.exe (or Open Z Note.cmd).', { ms: 10000 });
     }
     notify();
     return reconcile();
@@ -151,10 +151,10 @@
     const s = state();
     const label = s.active ? (native ? 'Awake on' : 'Awake: visible') : s.pending ? (s.enabled ? 'Starting…' : 'Stopping…') : s.enabled ? 'Awake paused' : 'Keep Awake';
     const detail = !supported ? 'Keep Awake is unavailable in this browser. Use Chrome or Edge.'
-      : s.active ? (native ? 'Windows Keep Awake is on, including when minimized or covered. Click to stop.' : 'Browser Keep Awake is on while visible. Background use requires Open Z Note.cmd.')
+      : s.active ? (native ? 'Windows Keep Awake is on, including when minimized or covered. Click to stop.' : 'Browser Keep Awake is on while visible. Background use requires Z Note.exe (or Open Z Note.cmd).')
       : s.pending ? (s.enabled ? 'Starting Keep Awake. Click to cancel.' : 'Stopping Keep Awake.')
       : s.enabled ? 'Keep Awake is paused. Resumes when Z Note is visible. Click to turn off.'
-      : error || (native ? 'Keep the screen on even when Z Note is minimized or covered. Stops when this window closes.' : 'Keep the screen on while Z Note is visible. Background use requires the Windows launcher, Open Z Note.cmd.');
+      : error || (native ? 'Keep the screen on even when Z Note is minimized or covered. Stops when this window closes.' : 'Keep the screen on while Z Note is visible. Background use requires the Windows launcher, Z Note.exe (or Open Z Note.cmd).');
     control.classList.toggle('awake-on', s.active);
     control.classList.toggle('awake-paused', s.enabled && !s.active);
     control.disabled = s.pending && !s.enabled && !s.active;
@@ -202,7 +202,7 @@
       });
       window.addEventListener('pageshow', event => {
         if (event.persisted && closing) {
-          error = 'This Windows Keep Awake session has ended. Reopen Z Note with Open Z Note.cmd.';
+          error = 'This Windows Keep Awake session has ended. Reopen Z Note with Z Note.exe (or Open Z Note.cmd).';
           notify();
         }
       });

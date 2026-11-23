@@ -127,6 +127,17 @@ html[data-paper="night"] .bi.ink.hl { mix-blend-mode: normal; }
 
 /* ---------- selection, marquee and handles (screen space) ---------- */
 .b-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.b-snap-guide { position: absolute; pointer-events: none; border: 0 dashed var(--accent); }
+.b-snap-guide.vertical { border-left-width: 1px; }
+.b-snap-guide.horizontal { border-top-width: 1px; }
+.b-snap-hint {
+  position: absolute; left: 82px; bottom: 19px; max-width: calc(100% - 390px);
+  padding: 6px 10px; border-radius: 7px; color: var(--ink-2); background: var(--paper);
+  font: 400 11.5px/1.4 var(--font-sans); pointer-events: none;
+}
+@media (max-width: 1000px) {
+  .b-snap-hint { bottom: 72px; left: 82px; max-width: calc(100% - 104px); }
+}
 .b-box { position: absolute; border: 1.5px solid var(--accent); border-radius: 2px; }
 .b-box.thin { border-width: 1px; opacity: .75; }
 .b-box.union { border-style: dashed; }

@@ -87,7 +87,7 @@
     const unlockEvents = () => editEvents.forEach(type => window.removeEventListener(type, blockEditing, true));
     let paused = false, installed = false, readyToReload = false, uncertain = false;
     try {
-      if (!native || !native.available) throw new Error('Open Z Note with Open Z Note.cmd to install automatically.');
+      if (!native || !native.available) throw new Error('Open Z Note with Z Note.exe (or Open Z Note.cmd) to install automatically.');
       if (S.memoryOnly) throw new Error('This is a temporary session. Download a backup and reopen Z Note with browser storage enabled before updating.');
       if (await S.otherWindowsOpen()) throw new Error('Close the other Z Note windows, then try again. This window and its notes can stay open.');
       await native.connect();
@@ -120,7 +120,7 @@
         (uncertain ? 'The update result could not be confirmed: ' : 'Update did not finish: ') + ((e && e.message) || 'Please try again.');
       const state = native && native.state ? native.state() : {};
       if (state.backupPath) backup.textContent = 'Your recovery backup is saved at: ' + state.backupPath;
-      if (uncertain) actions.append(h('p.set-note', 'Editing and folder sync are paused to protect your notes. Close this window and reopen Open Z Note.cmd so the launcher can finish recovery. Do not copy or replace app files while it is working.'));
+      if (uncertain) actions.append(h('p.set-note', 'Editing and folder sync are paused to protect your notes. Close this window and reopen Z Note.exe (or Open Z Note.cmd) so the launcher can finish recovery. Do not copy or replace app files while it is working.'));
       else if (!readyToReload) actions.append(h('button.btn', { type: 'button', onclick: () => modal.close() }, 'Back to my notes'));
     } finally {
       if (!readyToReload && !uncertain) {
@@ -205,7 +205,7 @@
               const capability = await ZN.updateNative.connect();
               if (!capability.supported) throw new Error('The current launcher does not support automatic updates.');
               if (ZN.store.memoryOnly) throw new Error('Automatic updates need browser storage. Save a backup before leaving this temporary session.');
-              if (capability.installAttempted) throw new Error('An installation has already been attempted. Close this window and reopen Open Z Note.cmd before checking again.');
+              if (capability.installAttempted) throw new Error('An installation has already been attempted. Close this window and reopen Z Note.exe (or Open Z Note.cmd) before checking again.');
               automaticButton.disabled = false;
               guide.hidden = true;
               automaticStatus.textContent = 'Ready to save your backup and install v' + found.version + '.';
@@ -229,7 +229,7 @@
       h('p.set-note', h('b', 'Installed version: v' + ZN.version)),
       h('p.set-note', 'Checks the public Z Note release on GitHub only when you press the button. Your notes, pictures and folder path are not sent.'),
       h('div.set-actions', check, link('Open releases page', LATEST)), status, details, automatic, guide,
-      h('p.set-note', 'For automatic installation on Windows, open Z Note using Open Z Note.cmd. A copy opened directly in a browser uses the backup and ZIP steps.'));
+      h('p.set-note', 'For automatic installation on Windows, open Z Note using Z Note.exe (or Open Z Note.cmd). A copy opened directly in a browser uses the backup and ZIP steps.'));
     if (checkNow) runCheck();
     return body;
   }

@@ -25,6 +25,7 @@
       name: '',
       expanded: {},
       sidebarCollapsed: false,
+      taskLayout: 'list', // one-column list until a user chooses priority columns
       seeded: false,
       inboxId: null,   // to-do list that quick-added tasks land in
       ideasId: null,   // note that quick-captured ideas land in

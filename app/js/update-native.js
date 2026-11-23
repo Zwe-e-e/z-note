@@ -8,7 +8,7 @@
     typeof window.TextEncoder === 'function' && typeof window.btoa === 'function' &&
     /^\d+$/.test(port) && Number(port) >= 1024 && Number(port) <= 65535 && /^[a-f0-9]{64}$/i.test(token);
   const endpoint = available ? 'ws://127.0.0.1:' + Number(port) + '/update/' + token : '';
-  const REOPEN = 'Close Z Note and reopen Open Z Note.cmd. If the launcher is older, download the latest portable version once.';
+  const REOPEN = 'Close Z Note and reopen Z Note.exe (or Open Z Note.cmd). If the launcher is older, download the latest portable version once.';
   const validVersion = value => typeof value === 'string' && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value) &&
     value.split('.').every(part => Number.isSafeInteger(Number(part)));
   let socket = null, connected = false, supported = false, closed = false, busy = false;
@@ -89,7 +89,7 @@
     settle(completed, null, value);
   }
   function connect() {
-    if (closed || !available) return Promise.reject(new Error('Open Z Note with Open Z Note.cmd on Windows to install updates automatically.'));
+    if (closed || !available) return Promise.reject(new Error('Open Z Note with Z Note.exe (or Open Z Note.cmd) on Windows to install updates automatically.'));
     if (installAttempted && !connected) return Promise.reject(new Error('An update has already been started in this window. ' + REOPEN));
     if (connected && supported) return Promise.resolve(state());
     if (connecting) return connecting;

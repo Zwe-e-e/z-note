@@ -1,13 +1,23 @@
 Z NOTE - PORTABLE BROWSER APP
-Version 2.4.2 - released 23 November 2026
+Version 2.5.0 - released 23 November 2026
 Check your installed version at the bottom of the sidebar or in Style & data.
 Use "Check for updates" in the sidebar or Style & data > Updates.
+
+NEW IN 2.5.0
+Switch Tasks and individual lists between 1 column and A/B/C priority columns.
+Drag tasks between priorities while keeping their original lists. Existing
+task content and stored priorities stay unchanged until you adjust them.
+Board sticky notes snap to nearby notes with alignment guides; hold Ctrl
+(Command on Mac) to move freely. The full download starts with the blue Z icon.
+The notebook format and source-folder settings remain compatible.
 
 GET STARTED
 1. Extract the ZIP completely. Keep the whole "Z Note" folder together.
    Do not run the app from inside the ZIP preview.
-2. On Windows, double-click "Open Z Note.cmd". It opens Z Note in Chrome
-   or Edge in its own window, with background Keep Awake and automatic updates.
+2. On Windows, double-click "Z Note.exe" (the blue Z icon). It opens Z Note
+   in Chrome or Edge with background Keep Awake and automatic updates.
+   "Open Z Note.cmd" also works. Keep the whole extracted folder together;
+   the icon launcher still works after moving that folder to another PC.
    You can also open "Z Note.html" directly in a desktop browser, with
    visible-window Keep Awake and manual updates. No installer or account is needed.
 3. In the first-run setup dialog, click "Choose source folder".
@@ -81,7 +91,10 @@ If the check fails, retry later or use the official releases page. Your notes,
 pictures and source-folder path are not sent to GitHub.
 
 AUTOMATIC UPDATES ON WINDOWS
-From v2.4.0 onward, open "Open Z Note.cmd". When a newer release is available,
+The 2.5.0 automatic update uses a package compatible with older launchers.
+Keep using your existing shortcut or "Open Z Note.cmd" after updating.
+The full portable download includes the new "Z Note.exe" icon launcher.
+Open "Z Note.exe" (or "Open Z Note.cmd" on older versions). When a newer release is available,
 click "Install update automatically". Close other Z Note windows and keep
 this window open while it works. Z Note saves a recovery backup on your PC
 and shows the full backup path, checks the official download, replaces the
@@ -90,7 +103,7 @@ Your notes, pictures, source-folder connection and settings are kept.
 
 Keep the recovery backup until you have checked your notes. If the update
 result cannot be confirmed, follow the on-screen instruction to close Z Note
-and reopen "Open Z Note.cmd" so the launcher can finish recovery.
+and reopen "Z Note.exe" or "Open Z Note.cmd" so the launcher can finish recovery.
 
 ONE-TIME UPGRADE FROM OLDER VERSIONS / MANUAL UPDATES
 v2.3.0 and older need one manual update to v2.4.0 to get the new launcher.
@@ -117,7 +130,7 @@ browser profile. The hosted and downloaded apps use separate browser storage;
 reconnect the notebook folder or restore your backup when moving between them.
 
 KEEP AWAKE
-On Windows, open "Open Z Note.cmd", then click "Keep Awake" beside "Snip".
+On Windows, open "Z Note.exe", then click "Keep Awake" beside "Snip".
 "Awake on" keeps the display and computer awake even when Z Note is minimized
 or covered by another app. Click it again to stop. Closing or reloading the
 Z Note window releases it; it starts off each time you reopen the app.
@@ -129,5 +142,5 @@ Keep the entire app folder together. It does not change your power settings.
 
 If you open the HTML directly or use the hosted website, the button shows
 "Awake: visible" and pauses when hidden. Download the latest ZIP and open
-"Open Z Note.cmd" to use background Keep Awake. If the helper disconnects,
+"Z Note.exe" (or "Open Z Note.cmd") to use background Keep Awake. If the helper disconnects,
 reopen using the launcher.

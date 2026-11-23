@@ -133,11 +133,11 @@ test('old host and invalid ready messages fail without attempting a backup or in
 
 test('constructor and handshake timeouts explain launcher recovery and clean up timers', async () => {
   const broken = harness({ constructorFailure: true });
-  await assert.rejects(broken.bridge.connect(), /reopen Open Z Note.cmd/);
+  await assert.rejects(broken.bridge.connect(), /reopen Z Note\.exe/);
   assert.equal(broken.timers.size, 0);
   const h = harness(), result = h.bridge.connect();
   h.fire(8000);
-  await assert.rejects(result, /reopen Open Z Note.cmd/);
+  await assert.rejects(result, /reopen Z Note\.exe/);
   assert.equal(h.timers.size, 0);
 });
 

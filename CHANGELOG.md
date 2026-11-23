@@ -1,5 +1,17 @@
 # Z Note release history
 
+## v2.5.0 — 2026-11-23
+
+- Open the portable folder with **Z Note.exe**, which has the Z icon and works after moving the whole folder to another PC. It starts the existing Windows helper for background Keep Awake and automatic updates without a command window.
+- Snap dragged board sticky notes to nearby notes' edges or centres, with temporary alignment guides. Hold Ctrl (Command on Mac) to move freely; selected groups keep their spacing, and each drag remains one undo step.
+- Switch between **1 column** and **3 columns** on individual to-do lists and the main Tasks page. Start with the existing single-column view and remember the user's choice.
+- Show tasks from every list and note together on the main Tasks page, grouped into **A · High**, **B · Medium**, and **C · Low**, with their source shown on each card.
+- Drag tasks between priorities, or use the priority selector. Changes on the main Tasks page update the original task while keeping it in its source list. Individual lists also support reordering.
+- Leave existing tasks unchanged until the user edits them. Switching views does not change task content, order, dates or stored priorities; existing flags appear as High and unassigned tasks appear as Medium in the three-column view.
+- Add tasks directly to a chosen priority; keep completed tasks together below the columns.
+
+The notebook format and source-folder settings remain compatible. Existing task content and stored priorities are preserved until the user changes them. A separate compatible update package keeps automatic updates available to older Windows launchers; the full portable download includes the new Z-icon launcher.
+
 ## v2.4.2 — 2026-11-23
 
 - Load an existing notebook's pages and pictures together before showing them. If a file is missing, still downloading, or cannot be saved, keep the previous notebook and folder connection available and explain the problem.

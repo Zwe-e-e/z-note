@@ -35,14 +35,14 @@
     notify();
   }
   function connect() {
-    if (closed || !available) return Promise.reject(new Error('Open Z Note with Open Z Note.cmd for Windows Keep Awake.'));
+    if (closed || !available) return Promise.reject(new Error('Open Z Note with Z Note.exe (or Open Z Note.cmd) for Windows Keep Awake.'));
     if (connected) return Promise.resolve();
     if (connecting) return connecting;
     error = '';
     // Create the promise before the socket so synchronous construction failures
     // can reject the same handshake as network failures.
     const ready = new Promise((resolve, reject) => {
-      handshake = { resolve, reject, timer: setTimeout(() => fail('The Windows helper did not respond. Reopen Z Note with Open Z Note.cmd.'), 5000) };
+      handshake = { resolve, reject, timer: setTimeout(() => fail('The Windows helper did not respond. Reopen Z Note with Z Note.exe (or Open Z Note.cmd).'), 5000) };
     });
     connecting = ready;
     try {
@@ -53,7 +53,7 @@
         let message;
         try { message = JSON.parse(event.data); } catch (_) { fail('Invalid response from Windows Keep Awake.'); return; }
         if (!message || message.type !== 'state' || message.protocol !== 1 || typeof message.active !== 'boolean' || message.error) {
-          fail('Windows Keep Awake could not confirm its state. Reopen Z Note with Open Z Note.cmd.'); return;
+          fail('Windows Keep Awake could not confirm its state. Reopen Z Note with Z Note.exe (or Open Z Note.cmd).'); return;
         }
         if (command && message.active !== (command.name === 'start')) {
           fail('Windows Keep Awake could not complete the request.'); return;
@@ -67,9 +67,9 @@
         settle(pending);
         notify();
       };
-      current.onerror = () => { if (socket === current) fail('Cannot connect to Windows Keep Awake. Reopen Z Note with Open Z Note.cmd.'); };
-      current.onclose = () => { if (socket === current) fail('Windows Keep Awake disconnected. Reopen Z Note with Open Z Note.cmd.'); };
-    } catch (_) { fail('Cannot connect to Windows Keep Awake. Reopen Z Note with Open Z Note.cmd.'); }
+      current.onerror = () => { if (socket === current) fail('Cannot connect to Windows Keep Awake. Reopen Z Note with Z Note.exe (or Open Z Note.cmd).'); };
+      current.onclose = () => { if (socket === current) fail('Windows Keep Awake disconnected. Reopen Z Note with Z Note.exe (or Open Z Note.cmd).'); };
+    } catch (_) { fail('Cannot connect to Windows Keep Awake. Reopen Z Note with Z Note.exe (or Open Z Note.cmd).'); }
     return ready;
   }
   function request(name) {

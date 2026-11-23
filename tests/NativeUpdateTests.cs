@@ -22,7 +22,7 @@ internal static class NativeUpdateTests
         if (relative == "app/js/version.js") return "window.ZN.version = '" + version + "';\n";
         return "test application file " + relative + " " + version;
     }
-    private static string Package(string version, string extra = null, bool missing = false, bool duplicate = false)
+    private static string Package(string version, string extra = null, bool missing = false, bool duplicate = false, bool launcher = true)
     {
         string path = Path.Combine(testRoot, Guid.NewGuid().ToString("N") + ".zip");
         using (ZipArchive archive = ZipFile.Open(path, ZipArchiveMode.Create))
@@ -30,6 +30,7 @@ internal static class NativeUpdateTests
             foreach (string relative in UpdateFiles.Allowed)
             {
                 if (missing && relative == "app/js/store.js") continue;
+                if (!launcher && relative == "Z Note.exe") continue;
                 using (StreamWriter writer = new StreamWriter(archive.CreateEntry("Z Note/" + relative).Open())) writer.Write(FileText(relative, version));
             }
             if (extra != null) using (StreamWriter writer = new StreamWriter(archive.CreateEntry(extra).Open())) writer.Write("unexpected");
@@ -37,10 +38,11 @@ internal static class NativeUpdateTests
         }
         return path;
     }
-    private static string App(string version)
+    private static string App(string version, bool launcher = true)
     {
         string root = DirectoryFor("app");
-        foreach (string relative in UpdateFiles.Allowed) Put(root, relative, FileText(relative, version));
+        foreach (string relative in UpdateFiles.Allowed)
+            if (launcher || relative != "Z Note.exe") Put(root, relative, FileText(relative, version));
         Put(root, "Z Note notebook/pages/private.json", "private notebook content");
         Put(root, "Z Note backup KEEP.json", "private backup content");
         Put(root, "personal.txt", "unrelated file");
@@ -85,6 +87,12 @@ internal static class NativeUpdateTests
         string valid = Package("2.4.0");
         List<string> files = UpdatePackage.Extract(valid, DirectoryFor("stage"), "2.4.0");
         Check(files.Count == UpdateFiles.Allowed.Length && files[files.Count - 1] == "VERSION.txt", "All runtime files validated; version marker last");
+        Check(files.Contains("Z Note.exe"), "Exact portable icon launcher path accepted");
+        List<string> legacyFiles = UpdatePackage.Extract(Package("2.4.0", null, false, false, false), DirectoryFor("stage"), "2.4.0");
+        Check(legacyFiles.Count == UpdateFiles.Allowed.Length - 1 && !legacyFiles.Contains("Z Note.exe"), "Legacy package without icon launcher accepted");
+        Reject(delegate { UpdatePackage.Extract(Package("2.4.0", null, true, false, false), DirectoryFor("stage"), "2.4.0"); }, "Legacy package still requires every existing runtime asset");
+        Reject(delegate { UpdatePackage.Extract(Package("2.4.0", "Z Note/Other.exe", false, false, false), DirectoryFor("stage"), "2.4.0"); }, "An unrelated executable cannot replace optional launcher");
+        Reject(delegate { UpdatePackage.Extract(Package("2.4.0", "Z Note/Z Note.lnk", false, false, false), DirectoryFor("stage"), "2.4.0"); }, "Machine-specific shortcut is not an allowed runtime asset");
         UpdatePackage package = new UpdatePackage { Size = new FileInfo(valid).Length, Digest = UpdateFiles.FileHash(valid) }; package.Verify(valid); assertions++;
         package.Digest = new string('0', 64); Reject(delegate { package.Verify(valid); }, "Corrupt ZIP checksum rejected");
         package.Digest = UpdateFiles.FileHash(valid); package.Size++; Reject(delegate { package.Verify(valid); }, "Wrong ZIP byte count rejected");
@@ -133,6 +141,49 @@ internal static class NativeUpdateTests
             other.Start(); other.Join(); Check(blocked, "Concurrent installer rejected");
         }
     }
+    private static void LauncherTransactions()
+    {
+        string zip = Package("3.0.0"), legacyZip = Package("3.0.0", null, false, false, false);
+        string root = App("2.4.2", false), state = DirectoryFor("state");
+        new UpdateTransaction(root, state).Apply(zip, "3.0.0", null, null);
+        Check(File.ReadAllText(Path.Combine(root, "Z Note.exe")) == FileText("Z Note.exe", "3.0.0"), "Update adds launcher to an older installation");
+        Check(File.ReadAllText(Path.Combine(root, "Z Note notebook/pages/private.json")) == "private notebook content", "Adding launcher leaves notebook untouched");
+
+        root = App("2.4.2"); state = DirectoryFor("state");
+        new UpdateTransaction(root, state).Apply(legacyZip, "3.0.0", null, null);
+        Check(File.ReadAllText(Path.Combine(root, "Z Note.exe")) == FileText("Z Note.exe", "2.4.2"), "Legacy update preserves an existing optional launcher");
+        Check(File.ReadAllText(Path.Combine(root, "app/js/store.js")) == FileText("app/js/store.js", "3.0.0"), "Legacy update still installs required assets");
+
+        root = App("2.4.2", false); state = DirectoryFor("state");
+        Reject(delegate {
+            new UpdateTransaction(root, state).Apply(zip, "3.0.0", null, delegate(int index) {
+                if (File.Exists(Path.Combine(root, "Z Note.exe"))) throw new IOException("Injected failure after new launcher installation");
+            });
+        }, "Failure after installing a new launcher triggers rollback");
+        Check(!File.Exists(Path.Combine(root, "Z Note.exe")), "Rollback removes newly added launcher");
+        foreach (string relative in UpdateFiles.Allowed)
+            if (relative != "Z Note.exe") Check(File.ReadAllText(UpdateFiles.Under(root, relative)) == FileText(relative, "2.4.2"), "Launcher rollback restores existing app file " + relative);
+        Check(File.ReadAllText(Path.Combine(root, "Z Note notebook/pages/private.json")) == "private notebook content", "Launcher rollback leaves notebook untouched");
+
+        root = App("2.4.2"); state = DirectoryFor("state");
+        Reject(delegate {
+            new UpdateTransaction(root, state).Apply(zip, "3.0.0", null, delegate(int index) {
+                if (File.ReadAllText(Path.Combine(root, "Z Note.exe")) == FileText("Z Note.exe", "3.0.0")) throw new IOException("Injected failure after launcher replacement");
+            });
+        }, "Failure after replacing a launcher triggers rollback");
+        Check(File.ReadAllText(Path.Combine(root, "Z Note.exe")) == FileText("Z Note.exe", "2.4.2"), "Rollback restores pre-existing launcher bytes");
+
+        // An interrupted transaction can include a newly added icon launcher.
+        root = App("2.4.2", false); state = DirectoryFor("state");
+        Put(root, "Z Note.exe", FileText("Z Note.exe", "3.0.0"));
+        File.WriteAllText(Path.Combine(state, "transaction.json"), Json(new Dictionary<string, object> {
+            { "root", root }, { "files", new object[] { new Dictionary<string, object> { { "path", "Z Note.exe" }, { "existed", false } } } }
+        }));
+        new UpdateTransaction(root, state).Recover();
+        Check(!File.Exists(Path.Combine(root, "Z Note.exe")), "Interrupted launcher installation recovers on reopen");
+        Check(File.ReadAllText(Path.Combine(root, "Z Note notebook/pages/private.json")) == "private notebook content", "Launcher recovery leaves notebook untouched");
+    }
+
     private static void BackupProtocol()
     {
         string root = App("2.4.0"), state = DirectoryFor("state");
@@ -173,7 +224,7 @@ internal static class NativeUpdateTests
         testRoot = Path.Combine(Path.GetTempPath(), "znu-" + Guid.NewGuid().ToString("N").Substring(0, 8)); Directory.CreateDirectory(testRoot);
         try
         {
-            VersionsAndRelease(); Archives(); Transactions(); BackupProtocol();
+            VersionsAndRelease(); Archives(); Transactions(); LauncherTransactions(); BackupProtocol();
             Console.WriteLine(assertions + " native updater assertions passed (temporary fixtures only; no network or real app updates)."); return 0;
         }
         catch (Exception e) { Console.Error.WriteLine(e); return 1; }

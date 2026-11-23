@@ -603,7 +603,7 @@ test('an earlier installation attempt cannot re-enable the automatic button', as
   t.nativeState.installAttempted = true;
   await button(root, 'Check for updates').onclick();
   assert.equal(button(root, 'Install update automatically').disabled, true);
-  assert.match(automatic(root).textContent, /already been attempted.*reopen Open Z Note.cmd/);
+  assert.match(automatic(root).textContent, /already been attempted.*reopen Z Note\.exe/);
   assert.equal(t.nativeCalls.length, 0);
   assert.equal(t.reloads, 0);
 });
@@ -618,7 +618,7 @@ test('an uncertain install keeps editing and sync paused and cannot be replayed'
     const modal = t.modals[0].el;
     assert.match(status(modal), /result could not be confirmed/);
     assert.match(modal.textContent, /Editing and folder sync are paused/);
-    assert.match(modal.textContent, /reopen Open Z Note.cmd/);
+    assert.match(modal.textContent, /reopen Z Note\.exe/);
     assert.match(modal.textContent, /C:\\Z Note\\Backups\\recovery.json/);
     assert.equal(all(modal, el => el.selector.startsWith('button') && el.textContent === 'Back to my notes').length, 0);
     assert.equal(t.app.inert, true);
