@@ -120,7 +120,7 @@ namespace ZNote.NativeHost
     {
         internal string Version, DownloadUrl, Digest;
         internal long Size;
-        private const string Repo = "https://github.com/ZweWH/z-note";
+        private const string Repo = "https://github.com/Zwe-e-e/z-note";
         internal static UpdatePackage Parse(string json, string requested, string installed)
         {
             IDictionary<string, object> release = UpdateFiles.Json(2 * 1024 * 1024).DeserializeObject(json) as IDictionary<string, object>;
@@ -179,7 +179,7 @@ namespace ZNote.NativeHost
         }
         internal static UpdatePackage Latest(string requested, string installed)
         {
-            using (HttpWebResponse response = Get("https://api.github.com/repos/ZweWH/z-note/releases/latest", false))
+            using (HttpWebResponse response = Get("https://api.github.com/repos/Zwe-e-e/z-note/releases/latest", false))
             using (Stream source = response.GetResponseStream())
             using (MemoryStream buffer = new MemoryStream())
             {
