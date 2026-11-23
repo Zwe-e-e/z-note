@@ -1602,11 +1602,16 @@
     setTool('select');
     if (!board.contains(document.activeElement)) board.focus({ preventScroll: true });
 
+    function prepareExport() {
+      if (editing) commitEdit();
+      nudgeCommit.flush();
+      saveView.flush();
+    }
+
     return {
+      prepareExport,
       unmount() {
-        if (editing) commitEdit();
-        nudgeCommit.flush();
-        saveView.flush();
+        prepareExport();
         alive = false;
         cancelAnimationFrame(fitRaf);
         ro.disconnect();

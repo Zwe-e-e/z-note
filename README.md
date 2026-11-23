@@ -1,8 +1,8 @@
 # Z Note
 
-**Current release: [v2.2.1](https://github.com/ZweWH/z-note/releases/tag/v2.2.1)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
+**Current release: [v2.3.0](https://github.com/ZweWH/z-note/releases/tag/v2.3.0)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
 
-Your installed version appears at the bottom of the app sidebar and in the **Style & data** title.
+Your installed version appears at the bottom of the app sidebar and in the **Style & data** title. Use **Check for updates** in the sidebar, or **Style & data → Updates**, to check for a newer release.
 
 A portable notebook you download to your PC and open in your own browser. Notes, tasks, boards, screen snips, themes, local folder saving and Keep Awake are included.
 
@@ -44,7 +44,18 @@ The local app and the previously hosted app use separate browser storage. To tra
 
 ## Updating
 
-Download and extract a fresh copy into a new folder. Keep your existing **Z Note notebook** folder and backups. Open the new app and reconnect the parent of your existing notebook through setup or **Style & data → Sync & backup**. Do not replace your saved notebook with a fresh copy of the application.
+Click **Check for updates** in the sidebar, or open **Style & data → Updates**. The check contacts the public Z Note GitHub repository only when you request it. It compares your installed version with the latest stable release and shows whether an update is available. If you are offline or GitHub cannot be reached, retry later or open the official releases page.
+
+The app guides you through saving a backup before downloading an update. A browser cannot replace the installed app files automatically.
+
+1. Click **Download a backup** and confirm the JSON file has finished saving on your PC. Only then tick the backup confirmation and download the update ZIP.
+2. Close all Z Note windows. Extract the ZIP into a separate temporary folder.
+3. Copy the new application files into your original **Z Note** app folder, replacing the matching app files. Keep your existing **Z Note notebook** folder and all backups; do not delete the original folder to install the update.
+4. Reopen Z Note from the same location with the same browser profile. Check that your pages and pictures are present before removing any old copies or backups.
+
+If you prefer to keep the updated app in a new location, reconnect the **parent folder containing Z Note notebook** through setup or **Style & data → Sync & backup**. For notes kept only in browser storage, restore the saved JSON backup through **Restore from a file… → Add to my notebook**. Browser storage does not travel with a copied application folder.
+
+For the hosted web app, save a backup first, then refresh the page in the same browser profile to load website updates. Moving between the hosted app and the downloaded app uses separate browser storage, so reconnect your notebook folder or restore the backup. An update check does not reload the app, replace files, or erase notes.
 
 ## Browser features
 
@@ -58,7 +69,7 @@ Opening the HTML directly or using the hosted app provides browser-only mode: **
 
 The launcher starts `app/native/ZNoteHost.exe`, a small helper whose source is in this repository. It opens the same local HTML file and talks only to that window over an authenticated connection on your own PC. It does not change power settings or move the mouse. If the helper disconnects, the button switches off; reopen using the launcher. The helper exits shortly after its Z Note windows close.
 
-The app includes no analytics or external service integrations, and does not upload notebook contents to GitHub. GitHub Pages hosts the download page and the public application files.
+The app includes no analytics and does not upload notebook contents to GitHub. A manual update check retrieves public release information from GitHub; it does not send your notes, pictures, or source-folder path. GitHub Pages hosts the download page and the public application files.
 
 ## Development
 
@@ -71,6 +82,7 @@ node --test tests/awake.test.cjs
 node --test tests/native-bridge.test.cjs tests/awake-native-integration.test.cjs
 node --test tests/setup.test.cjs
 node --test tests/source-folder.test.cjs
+node --test tests/updates.test.cjs tests/backup.test.cjs
 ```
 
 To build and test the Windows helper, then rebuild the portable ZIP in PowerShell:

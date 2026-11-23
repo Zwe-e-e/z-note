@@ -406,6 +406,14 @@ button.prow:hover { background: var(--paper-3); }
 
 /* ---------- style & data panel ---------- */
 .settings { display: grid; gap: 18px; padding-bottom: 6px; }
+.update-status { margin: 0; font-weight: 600; line-height: 1.5; }
+.update-details:empty { display: none; }
+.update-guide[hidden] { display: none; }
+.update-steps { padding-left: 22px; margin: 12px 0; font-size: 14px; line-height: 1.6; }
+.update-steps li + li { margin-top: 8px; }
+.update-confirm { display: flex; gap: 9px; align-items: flex-start; margin: 12px 0; font-size: 14px; line-height: 1.5; }
+.update-confirm input { flex: 0 0 auto; margin-top: 4px; }
+.updates a.btn { text-decoration: none; }
 .set-row { display: grid; grid-template-columns: 124px 1fr; gap: 12px; align-items: center; }
 .set-row > label, .set-row > .set-label { font: 400 17px/1.1 var(--font-hand); color: var(--ink-2); -webkit-text-stroke: .2px currentColor; }
 .seg { display: flex; flex-wrap: wrap; gap: 6px; }

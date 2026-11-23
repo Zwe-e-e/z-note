@@ -53,6 +53,7 @@ $versionScript = "/* Generated from VERSION.txt by scripts/package-portable.ps1.
     'app/js/templates.js'
     'app/js/todo.js'
     'app/js/ui.js'
+    'app/js/updates.js'
     'app/js/util.js'
     'app/js/version.js'
     'app/native/ZNoteHost.exe'

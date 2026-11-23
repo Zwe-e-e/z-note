@@ -66,13 +66,18 @@
 
   /* ---------- backup: one file ---------- */
   async function exportAll() {
+    const view = ZN.shell && ZN.shell.view();
+    if (view && view.prepareExport) await view.prepareExport();
     await S.flush();
-    const blobs = await S.listBlobs();
+    const settings = JSON.parse(JSON.stringify(S.settings));
+    const pages = JSON.parse(JSON.stringify(Array.from(S.pages.values())));
+    // A failed image read must not turn into an apparently complete backup.
+    const blobs = S.memoryOnly ? await S.listBlobs() : await db.all('blobs');
     const images = [];
     for (const b of blobs) {
       images.push({ id: b.id, mime: b.mime, name: b.name, kind: b.kind, w: b.w, h: b.h, created: b.created, data: await U.blobToDataURL(b.blob) });
     }
-    return { app: 'znote', version: 1, exported: Date.now(), settings: S.settings, pages: Array.from(S.pages.values()), images };
+    return { app: 'znote', version: 1, exported: Date.now(), settings, pages, images };
   }
 
   async function download() {
@@ -80,7 +85,8 @@
     const name = 'Z Note backup ' + U.ymd() + '.json';
     U.download(new Blob([JSON.stringify(data)], { type: 'application/json' }), name);
     S.setSetting('backupAt', Date.now());
-    ui.toast('Backup saved as “' + name + '” in your Downloads folder.');
+    ui.toast('Backup download started: “' + name + '”. Check that the file has finished saving before closing Z Note.', { ms: 8000 });
+    return name;
   }
 
   function normalizePage(p) {
@@ -261,13 +267,15 @@
 
   /* ---------- the panel ---------- */
   let panel = null;
-  function open(tab) {
+  function open(tab, checkUpdates) {
     const body = h('div');
-    const panes = { style: ['Style', stylePane], data: ['Sync & backup', dataPane], keys: ['Shortcuts', keysPane] };
+    const panes = { style: ['Style', stylePane], data: ['Sync & backup', dataPane], keys: ['Shortcuts', keysPane],
+      updates: ['Updates', () => ZN.updates.pane(!!checkUpdates)] };
     const tabs = h('div.tabs', { role: 'tablist' });
     const show = id => {
       tabs.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.id === id));
       U.clear(body).append(panes[id][1]());
+      checkUpdates = false;
     };
     Object.keys(panes).forEach(id => tabs.append(h('button.tab', { type: 'button', role: 'tab', dataset: { id }, onclick: () => show(id) }, panes[id][0])));
     panel = ui.modal({ title: 'Style & data' + (ZN.version ? ' · v' + ZN.version : ''), width: 640, body: [tabs, body], onClose: () => { panel = null; } });

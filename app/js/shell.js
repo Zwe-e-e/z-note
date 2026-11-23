@@ -151,6 +151,7 @@
         ZN.sourceFolder ? ZN.sourceFolder.button() : null,
         navRow('trash', 'trash', 'Trash'),
         h('button.row.nav-row', { type: 'button', 'data-act': 'style' }, h('span.row-icon', ZN.icon('palette', 17)), h('span.row-title', 'Style & data')),
+        h('button.row.nav-row', { type: 'button', 'data-act': 'updates' }, h('span.row-icon', ZN.icon('download', 17)), h('span.row-title', 'Check for updates')),
         ZN.version ? h('div.app-version', { 'aria-label': 'Z Note version ' + ZN.version }, 'Z Note v' + ZN.version) : null));
     scroll.scrollTop = top;
     markActive();
@@ -204,6 +205,7 @@
         if (a === 'new-nb') { newNotebook(); return; }
         if (a === 'search') { if (ZN.search) ZN.search.open(); return; }
         if (a === 'style') { if (ZN.settings) ZN.settings.open(); return; }
+        if (a === 'updates') { if (ZN.updates) ZN.updates.open(); return; }
         if (a === 'collapse') { toggleSidebar(); return; }
       }
       if (row) ZN.openPage(row.dataset.id);

@@ -1,6 +1,7 @@
 Z NOTE - PORTABLE BROWSER APP
-Version 2.2.1 - released 23 November 2026
+Version 2.3.0 - released 23 November 2026
 Check your installed version at the bottom of the sidebar or in Style & data.
+Use "Check for updates" in the sidebar or Style & data > Updates.
 
 GET STARTED
 1. Extract the ZIP completely. Keep the whole "Z Note" folder together.
@@ -62,9 +63,30 @@ Share the original "Z-Note-Portable.zip" download with other people. Each
 person creates their own notebook. Do not share your working folder or your
 "Z Note notebook" folder unless you intend to share its private contents.
 
-Before updating the app, save a backup. Replace only the app files; keep your
-"Z Note notebook" folder. If you use a new app location or another browser,
-reconnect to your notebook folder or restore your backup.
+Click "Check for updates" to compare your version with the latest stable
+GitHub release. Internet access is needed only for the check and download.
+If the check fails, retry later or use the official releases page. Your notes,
+pictures and source-folder path are not sent to GitHub.
+
+The update screen guides you through these steps. It does not install files
+or restart the app automatically.
+1. Click "Download a backup". Check that the JSON file has finished saving
+   on your PC, then tick the backup confirmation and download the update ZIP.
+2. Close all Z Note windows and extract the ZIP into a separate folder.
+3. Copy the new app files into your original Z Note app folder, replacing
+   matching app files. Keep "Z Note notebook" and your backups. Do not delete
+   your original Z Note folder to install the update.
+4. Reopen from the same location using the same browser profile. Check your
+   pages and pictures before removing any old copies or backups.
+
+If you choose a new app location, reconnect the parent folder CONTAINING
+"Z Note notebook". If your notes were kept only in browser storage, restore
+your JSON backup through Style & data > Sync & backup > Restore from a file,
+then choose "Add to my notebook". Copying the app does not copy browser data.
+
+For the hosted web app, save a backup first, then refresh the page in the same
+browser profile. The hosted and downloaded apps use separate browser storage;
+reconnect the notebook folder or restore your backup when moving between them.
 
 KEEP AWAKE
 On Windows, open "Open Z Note.cmd", then click "Keep Awake" beside "Snip".

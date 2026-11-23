@@ -1,5 +1,15 @@
 # Z Note release history
 
+## v2.3.0 — 2026-11-23
+
+- Add **Check for updates** to the sidebar and an **Updates** tab in Style & data.
+- Compare the installed version with the latest stable public GitHub release, with clear update-available, up-to-date, offline and error messages. Checks are manual and do not upload notes, pictures or source-folder paths.
+- Guide updates through a backup download and confirmation that the backup was saved before enabling the update ZIP download. Links stay within the official Z Note release and download locations.
+- Explain how to replace app files while keeping the original notebook folder, or reconnect a notebook and restore a backup when changing locations. The app does not automatically install files, reload, or clear stored notes.
+- Include pending board edits in backup exports and stop backup creation if stored pictures cannot be read, instead of silently exporting an incomplete backup.
+
+The notebook and backup formats and the Windows helper are unchanged from v2.2.1.
+
 ## v2.2.1 — 2026-11-23
 
 - Show the installed version at the bottom of the app sidebar and in the Style & data title.
