@@ -289,6 +289,30 @@ button.chip:hover { border-color: var(--ink-2); color: var(--ink); }
 }
 .empty small { display: block; font: 400 13px/1.5 var(--font-sans); margin-top: 6px; }
 
+/* Shared optional donation dialog, used by the app and download page. */
+.donate-dialog {
+  position: fixed; inset: 0; margin: auto; width: min(460px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px); overflow: auto; padding: 26px;
+  border: 1.5px solid var(--rule-2); border-radius: 12px 9px 14px 10px;
+  background: var(--paper); color: var(--ink); box-shadow: 0 18px 65px #0003;
+  font: 14px/1.65 var(--font-sans);
+}
+.donate-dialog::backdrop { background: #202b3a66; }
+.donate-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.donate-head h2 { font: 30px/1.2 var(--font-hand); }
+.donate-amounts { border: 0; padding: 0; margin: 24px 0 16px; display: flex; gap: 12px; }
+.donate-amounts legend { font-size: 13px; color: var(--ink-2); margin-bottom: 10px; }
+.donate-option {
+  flex: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 7px;
+  padding: 13px 8px; border: 1px solid var(--rule-2); border-radius: 8px; cursor: pointer;
+}
+.donate-option:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); }
+.donate-option input { accent-color: var(--accent); width: 16px; height: 16px; }
+.donate-option span { font-size: 23px; font-weight: 600; }
+.donate-option small { flex-basis: 100%; text-align: center; color: var(--ink-2); font-size: 11px; }
+.donate-dialog .donate-paypal { width: 100%; margin: 6px 0; justify-content: center; text-decoration: none; }
+.donate-note { color: var(--ink-2); font-size: 12px; margin: 12px 0 0; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
 }
