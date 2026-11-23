@@ -55,7 +55,7 @@ internal static class NativeUpdateTests
             { "assets", new object[] { new Dictionary<string, object> {
                 { "name", "Z-Note-v" + version + "-Portable.zip" }, { "state", "uploaded" }, { "size", 123 },
                 { "digest", "sha256:" + new string('a', 64) },
-                { "browser_download_url", "https://github.com/ZweWH/z-note/releases/download/v" + version + "/Z-Note-v" + version + "-Portable.zip" }
+                { "browser_download_url", "https://github.com/Zwe-e-e/z-note/releases/download/v" + version + "/Z-Note-v" + version + "-Portable.zip" }
             } } }
         };
     }
@@ -77,6 +77,11 @@ internal static class NativeUpdateTests
         Dictionary<string, object> asset = (Dictionary<string, object>)((object[])release["assets"])[0];
         asset["browser_download_url"] = "https://example.com/app.zip";
         Reject(delegate { UpdatePackage.Parse(Json(release), "2.4.0", "2.3.0"); }, "Foreign asset URL rejected");
+        release = Release("2.5.0"); asset = (Dictionary<string, object>)((object[])release["assets"])[0];
+        package = UpdatePackage.Parse(Json(release), "2.5.0", "2.4.2");
+        Check(package.DownloadUrl == "https://github.com/Zwe-e-e/z-note/releases/download/v2.5.0/Z-Note-v2.5.0-Portable.zip", "Transferred repository package accepted at new canonical owner");
+        asset["browser_download_url"] = ((string)asset["browser_download_url"]).Replace("Zwe-e-e/z-note", "ZweWH/z-note");
+        Reject(delegate { UpdatePackage.Parse(Json(release), "2.5.0", "2.4.2"); }, "Old-owner package URL cannot replace new canonical release asset");
         release = Release("2.4.0"); asset = (Dictionary<string, object>)((object[])release["assets"])[0];
         asset["digest"] = null; Reject(delegate { UpdatePackage.Parse(Json(release), "2.4.0", "2.3.0"); }, "Missing digest rejected");
         asset["digest"] = "sha256:" + new string('a', 64); asset["size"] = 67108865;

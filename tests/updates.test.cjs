@@ -6,8 +6,8 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-const REPO = 'https://github.com/ZweWH/z-note';
-const API = 'https://api.github.com/repos/ZweWH/z-note/releases/latest';
+const REPO = 'https://github.com/Zwe-e-e/z-note';
+const API = 'https://api.github.com/repos/Zwe-e-e/z-note/releases/latest';
 function deferred() {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
@@ -191,15 +191,26 @@ test('download URL must be the exact known package in the official release', () 
   const urls = [
     'https://evil.example/update.zip',
     'javascript:alert(1)',
-    'https://github.com.evil.example/ZweWH/z-note/update.zip',
+    'https://github.com.evil.example/Zwe-e-e/z-note/update.zip',
     good.assets[0].browser_download_url + '?redirect=evil',
-    good.assets[0].browser_download_url.replace('ZweWH/z-note', 'Someone/other-repo'),
+    good.assets[0].browser_download_url.replace('Zwe-e-e/z-note', 'Someone/other-repo'),
     good.assets[0].browser_download_url.replace('v2.4.0/', 'v2.3.0/'),
     good.assets[0].browser_download_url.replace('https:', 'http:')
   ];
   for (const url of urls) {
     assert.equal(parseRelease({ ...good, assets: [{ ...good.assets[0], browser_download_url: url }] }).downloadURL, null);
   }
+});
+
+test('repository migration uses the new owner and rejects old-owner package URLs', async () => {
+  const data = release('2.5.0');
+  const t = harness({ fetch: async () => response(data) });
+  const parsed = await t.updates.checkLatest();
+  assert.equal(t.calls[0].url, 'https://api.github.com/repos/Zwe-e-e/z-note/releases/latest');
+  assert.equal(parsed.releaseURL, 'https://github.com/Zwe-e-e/z-note/releases/tag/v2.5.0');
+  assert.equal(parsed.downloadURL, 'https://github.com/Zwe-e-e/z-note/releases/download/v2.5.0/Z-Note-v2.5.0-Portable.zip');
+  data.assets[0].browser_download_url = data.assets[0].browser_download_url.replace('Zwe-e-e/z-note', 'ZweWH/z-note');
+  assert.equal(t.updates.parseRelease(data).downloadURL, null);
 });
 
 test('incomplete, absent, or differently named assets cannot offer an update download', () => {
