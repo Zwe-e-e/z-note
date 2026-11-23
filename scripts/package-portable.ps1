@@ -10,10 +10,14 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $projectRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $outputDirectory = Join-Path $projectRoot 'downloads'
 $outputPath = Join-Path $outputDirectory 'Z-Note-Portable.zip'
+$version = [IO.File]::ReadAllText((Join-Path $projectRoot 'VERSION.txt')).Trim()
+if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'VERSION.txt must contain an app release version such as 2.2.0.' }
 
 # Add new runtime assets explicitly here after review. Never package app data,
 # backup exports, development configuration, or files selected by a wildcard.
 [string[]]$files = @(
+    'VERSION.txt'
+    'CHANGELOG.md'
     'Z Note.html'
     'Open Z Note.cmd'
     'START HERE.txt'
@@ -110,6 +114,7 @@ try {
 
 $result = Get-Item -LiteralPath $outputPath
 [pscustomobject]@{
+    Version = $version
     Archive = $result.FullName
     Files = $files.Count
     HtmlAssetsVerified = $assetCount

@@ -1,5 +1,7 @@
 # Z Note
 
+**Current release: [v2.2.0](https://github.com/ZweWH/z-note/releases/tag/v2.2.0)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
+
 A portable notebook you download to your PC and open in your own browser. Notes, tasks, boards, screen snips, themes, local folder saving and Keep Awake are included.
 
 **[Download page](https://zwewh.github.io/z-note/)** · **[Download Z Note Portable ZIP](https://zwewh.github.io/z-note/downloads/Z-Note-Portable.zip)**
