@@ -2,6 +2,8 @@
 # Run from any directory: powershell -NoProfile -File scripts/package-portable.ps1
 # Fixed ordering and ZIP timestamps make identical inputs reproducible on the
 # same PowerShell/.NET runtime. No personal notebook or repository scan is used.
+param([string]$NativeHostPath)
+
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 Add-Type -AssemblyName System.IO.Compression
@@ -54,19 +56,27 @@ $versionScript = "/* Generated from VERSION.txt by scripts/package-portable.ps1.
     'app/js/todo.js'
     'app/js/ui.js'
     'app/js/updates.js'
+    'app/js/update-native.js'
     'app/js/util.js'
     'app/js/version.js'
     'app/native/ZNoteHost.exe'
 )
 [Array]::Sort($files, [StringComparer]::Ordinal)
 $allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+$sourcePaths = @{}
 foreach ($relative in $files) {
     if (-not $allowed.Add($relative)) { throw "Duplicate package path: $relative" }
     $sourcePath = [IO.Path]::GetFullPath((Join-Path $projectRoot $relative))
     if (-not $sourcePath.StartsWith($projectRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Package path escapes project: $relative"
     }
+    # A running older helper can keep its executable locked. Package a reviewed
+    # staged build without closing any live notebook or replacing that process.
+    if ($relative -eq 'app/native/ZNoteHost.exe' -and $NativeHostPath) {
+        $sourcePath = [IO.Path]::GetFullPath($NativeHostPath)
+    }
     if (-not [IO.File]::Exists($sourcePath)) { throw "Missing required package file: $relative" }
+    $sourcePaths[$relative] = $sourcePath
 }
 
 # Verify the actual app HTML refers only to assets that will be in this ZIP.
@@ -93,7 +103,7 @@ try {
                 $entry = $archive.CreateEntry('Z Note/' + $relative, [IO.Compression.CompressionLevel]::Optimal)
                 $entry.LastWriteTime = $fixedTime
                 $entry.ExternalAttributes = 0
-                $sourceStream = [IO.File]::OpenRead((Join-Path $projectRoot $relative))
+                $sourceStream = [IO.File]::OpenRead($sourcePaths[$relative])
                 try {
                     $entryStream = $entry.Open()
                     try { $sourceStream.CopyTo($entryStream) } finally { $entryStream.Dispose() }

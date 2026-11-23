@@ -96,7 +96,8 @@ function clientFrame(input, opcode = 1, options = {}) {
 test('portable Windows host protocol and lifecycle', { timeout: 100000 }, async t => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'znote-native-test-'));
   const infoPath = path.join(temp, 'connection.json');
-  const child = spawn(path.join(projectRoot, 'app/native/ZNoteHost.exe'), ['--no-browser', '--test-info', infoPath], {
+  const executable = process.env.ZNOTE_NATIVE_HOST || path.join(projectRoot, 'app/native/ZNoteHost.exe');
+  const child = spawn(executable, ['--no-browser', '--page', path.join(projectRoot, 'Z Note.html'), '--test-info', infoPath], {
     cwd: projectRoot, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe']
   });
   const exited = once(child, 'exit');
@@ -136,7 +137,7 @@ test('portable Windows host protocol and lifecycle', { timeout: 100000 }, async 
       assert.match(response, /^HTTP\/1\.1 101 /);
       const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
       assert.ok(response.includes('Sec-WebSocket-Accept: ' + accept + '\r\n'));
-      assert.equal((await reader.state()).active, false, 'each connection starts off');
+      if (!overrides.update) assert.equal((await reader.state()).active, false, 'each connection starts off');
       return { socket, reader, response };
     };
     const command = async (connection, text) => {
@@ -146,6 +147,37 @@ test('portable Windows host protocol and lifecycle', { timeout: 100000 }, async 
 
     // Keep one authenticated connection open while invalid clients are exercised.
     const main = await connect();
+    await t.test('update endpoint authenticates and test helper cannot install or write a backup', async () => {
+      for (const override of [
+        { path: '/update/' + '0'.repeat(64) },
+        { path: '/update/' + info.token, headers: { Origin: 'https://example.com' } }
+      ]) {
+        const client = await connect({ ...override, rejected: true });
+        assert.match(client.response, /^HTTP\/1\.1 403 /);
+        client.socket.destroy();
+      }
+      const client = await connect({ path: '/update/' + info.token, update: true });
+      const response = async () => {
+        const frame = await client.reader.frame();
+        assert.equal(frame.opcode, 1);
+        const value = JSON.parse(frame.payload.toString('utf8'));
+        assert.equal(value.type, 'update');
+        assert.equal(value.protocol, 1);
+        return value;
+      };
+      const ready = await response();
+      assert.equal(ready.stage, 'ready');
+      assert.equal(ready.supported, false);
+      assert.equal(ready.maxBackupBytes, 268435456);
+      assert.match(ready.version, /^\d+\.\d+\.\d+$/);
+      for (const message of [{ command: 'backup-begin', bytes: 10 }, { command: 'install', version: '99.0.0' }]) {
+        client.socket.write(clientFrame(JSON.stringify(message)));
+        const error = await response();
+        assert.equal(error.stage, 'error');
+        assert.match(error.message, /disabled/);
+      }
+      client.socket.destroy();
+    });
     await t.test('token, Host and Origin are all checked before upgrade', async () => {
       for (const override of [
         { path: '/awake/' + '0'.repeat(64) },

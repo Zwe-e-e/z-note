@@ -96,6 +96,17 @@ test('a browser handle shows a relative notebook location, not an inferred drive
   assert.match(info.notebookPath, /Work notes.*Z Note notebook/);
 });
 
+test('selecting the notebook directly shows the selected folder once', async () => {
+  const h = harness({ dir: handle('direct', 'Z Note notebook') });
+  h.sync.direct = true;
+  await h.source.init();
+  assert.equal(h.source.info().direct, true);
+  assert.equal(h.source.info().notebookPath, '… / Z Note notebook');
+  await h.source.setPath('D:\\Shared\\Z Note notebook');
+  assert.equal(h.source.info().notebookPath, 'D:\\Shared\\Z Note notebook');
+  assert.equal(h.source.info().fullPath, true);
+});
+
 test('a supplied full path is stored only in device metadata and bound to its directory handle', async () => {
   const dir = handle('one');
   const h = harness({ dir });

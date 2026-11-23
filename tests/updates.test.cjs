@@ -92,7 +92,73 @@ function harness(options = {}) {
   };
   context.window = context;
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../app/js/updates.js'), 'utf8'), context, { filename: 'app/js/updates.js' });
-  return { updates: ZN.updates, current, calls, timers, opened, backupCalls, forbidden };
+  return { updates: ZN.updates, ZN, context, current, calls, timers, opened, backupCalls, forbidden };
+}
+
+// Installation fixtures model only the already authenticated bridge capability.
+// They never launch a helper, touch browser storage, download files or navigate.
+function nativeHarness(options = {}) {
+  const t = harness(options), events = [], modals = [], listeners = new Map(), documentListeners = new Map();
+  const app = h('div#app', { inert: false }), priorModal = h('div.modal', { inert: true });
+  const notebook = { app: 'znote', version: 1, pages: [{ id: 'note-1', text: 'Keep me' }], images: [], settings: { sourceFolder: 'unchanged' } };
+  const state = { supported: true, installAttempted: false, backupPath: '' };
+  const nativeCalls = [];
+  let reloads = 0;
+  function add(map, name, fn) { if (!map.has(name)) map.set(name, new Set()); map.get(name).add(fn); }
+  function remove(map, name, fn) { if (map.has(name)) map.get(name).delete(fn); }
+  Object.assign(t.current, {
+    connect: options.connect || (async () => ({ ...state })),
+    otherWindowsOpen: options.otherWindowsOpen || (async () => false),
+    pause: options.pause || (async () => {}),
+    prepareExport: options.prepareExport || (async () => {}),
+    checkpoint: options.checkpoint || (async () => {}),
+    exportAll: options.exportAll || (async () => notebook),
+    install: options.install || (async (_backup, version) => ({ stage: 'installed', version, backupPath: 'C:\\Z Note\\Backups\\notebook.json' }))
+  });
+  t.ZN.updateNative = {
+    available: options.available !== false,
+    async connect() { events.push('connect'); return t.current.connect(); },
+    state() { return { ...state }; },
+    async install(backup, version, onProgress) {
+      events.push('install');
+      nativeCalls.push({ backup, version, onProgress });
+      state.installAttempted = options.installAttempted !== false;
+      return t.current.install(backup, version, onProgress);
+    }
+  };
+  t.ZN.store = {
+    memoryOnly: !!options.memoryOnly,
+    async otherWindowsOpen() { events.push('otherWindowsOpen'); return t.current.otherWindowsOpen(); },
+    async checkpoint() { events.push('checkpoint'); return t.current.checkpoint(); }
+  };
+  t.ZN.sync = {
+    async pause() { events.push('pause'); return t.current.pause(); },
+    resume() { events.push('resume'); }
+  };
+  t.ZN.shell = { view: () => ({ async prepareExport() { events.push('prepareExport'); return t.current.prepareExport(); } }) };
+  t.ZN.settings.exportAll = async () => { events.push('exportAll'); return t.current.exportAll(); };
+  t.ZN.ui = { modal(config) {
+    const modal = { config, el: h('div.modal', {}, config.body), closed: false, close() { this.closed = true; } };
+    modals.push(modal);
+    return modal;
+  } };
+  t.context.document = {
+    querySelectorAll(selector) { assert.equal(selector, '#app, .modal'); return [app, priorModal]; },
+    addEventListener(name, fn) { add(documentListeners, name, fn); },
+    removeEventListener(name, fn) { remove(documentListeners, name, fn); }
+  };
+  t.context.location = { reload() { events.push('reload'); reloads++; } };
+  t.context.addEventListener = (name, fn) => add(listeners, name, fn);
+  t.context.removeEventListener = (name, fn) => remove(listeners, name, fn);
+  return { ...t, events, modals, listeners, documentListeners, app, priorModal, notebook, nativeCalls, nativeState: state,
+    get reloads() { return reloads; } };
+}
+function automatic(root) {
+  return one(root, el => el.selector === 'div.set-group' && el.children.some(child => child instanceof Element && child.selector === 'h3' && child.textContent === 'Automatic update'));
+}
+async function advanceUntil(predicate) {
+  for (let i = 0; i < 30 && !predicate(); i++) await Promise.resolve();
+  assert.equal(!!predicate(), true, 'The expected asynchronous operation was not reached');
 }
 
 test('release versions compare numeric components, not text or decimals', () => {
@@ -358,4 +424,232 @@ test('repeated clicks during a check or backup do not start duplicate operations
   assert.equal(t.backupCalls.length, 1);
   backup.resolve('backup.json');
   await firstBackup;
+});
+
+test('a supported launcher offers automatic installation without the manual backup checkbox', async () => {
+  const t = nativeHarness();
+  const root = t.updates.pane();
+  assert.deepEqual(t.events, [], 'Opening an idle pane must not connect or install');
+  await button(root, 'Check for updates').onclick();
+  assert.deepEqual(t.events, ['connect'], 'A capability probe must not read or transmit notes');
+  assert.equal(automatic(root).hidden, false);
+  assert.equal(button(root, 'Install update automatically').disabled, false);
+  assert.equal(guide(root).hidden, true);
+  assert.equal(checkbox(root).checked, false);
+  assert.equal(downloadLinks(root).length, 0);
+  assert.equal(t.backupCalls.length, 0);
+  assert.equal(t.nativeCalls.length, 0);
+  assert.equal(t.reloads, 0);
+  assert.deepEqual(t.forbidden, []);
+});
+
+test('current releases, older releases and unfinished assets do not probe the launcher', async () => {
+  for (const data of [release('2.3.0'), release('2.2.0'), { ...release(), assets: [] }]) {
+    const t = nativeHarness({ fetch: async () => response(data) });
+    const root = t.updates.pane();
+    await button(root, 'Check for updates').onclick();
+    assert.deepEqual(t.events, []);
+    assert.equal(automatic(root).hidden, true);
+    assert.equal(button(root, 'Install update automatically').disabled, true);
+  }
+});
+
+test('an unavailable or incompatible launcher preserves the manual backup-first route', async () => {
+  for (const options of [
+    { available: false },
+    { connect: async () => ({ supported: false }) },
+    { connect: async () => { throw new Error('Reopen Open Z Note.cmd to connect to the new launcher.'); } }
+  ]) {
+    const t = nativeHarness(options), root = t.updates.pane();
+    await button(root, 'Check for updates').onclick();
+    assert.equal(button(root, 'Install update automatically').disabled, true);
+    assert.equal(guide(root).hidden, false);
+    assert.equal(checkbox(root).disabled, true);
+    assert.equal(downloadLinks(root).length, 0);
+    assert.equal(t.nativeCalls.length, 0);
+    assert.equal(t.events.includes('checkpoint'), false);
+    if (options.available !== false) assert.match(automatic(root).textContent, /backup and ZIP steps/);
+  }
+});
+
+test('temporary browser storage cannot enable automatic installation', async () => {
+  const t = nativeHarness({ memoryOnly: true }), root = t.updates.pane();
+  await button(root, 'Check for updates').onclick();
+  assert.equal(button(root, 'Install update automatically').disabled, true);
+  assert.equal(guide(root).hidden, false);
+  assert.match(automatic(root).textContent, /browser storage/);
+  assert.deepEqual(t.events, ['connect']);
+  assert.equal(t.nativeCalls.length, 0);
+  assert.equal(t.reloads, 0);
+});
+
+test('a new check clears a formerly enabled automatic button while probing', async () => {
+  const t = nativeHarness(), root = t.updates.pane();
+  await button(root, 'Check for updates').onclick();
+  assert.equal(button(root, 'Install update automatically').disabled, false);
+  const capability = deferred();
+  t.current.connect = () => capability.promise;
+  const checking = button(root, 'Check for updates').onclick();
+  assert.equal(button(root, 'Install update automatically').disabled, true);
+  await advanceUntil(() => t.events.filter(event => event === 'connect').length === 2);
+  assert.equal(button(root, 'Install update automatically').disabled, true);
+  capability.reject(new Error('Launcher disconnected'));
+  await checking;
+  assert.equal(button(root, 'Install update automatically').disabled, true);
+  assert.equal(guide(root).hidden, false);
+});
+
+test('install saves pending edits and durable storage before backup upload, then reloads once', async () => {
+  const t = nativeHarness(), root = t.updates.pane();
+  await button(root, 'Check for updates').onclick();
+  t.events.length = 0;
+  await button(root, 'Install update automatically').onclick();
+  assert.deepEqual(t.events, ['otherWindowsOpen', 'connect', 'pause', 'prepareExport', 'checkpoint', 'exportAll', 'install', 'checkpoint', 'reload']);
+  assert.equal(t.nativeCalls.length, 1);
+  assert.equal(t.nativeCalls[0].backup, t.notebook);
+  assert.equal(t.nativeCalls[0].version, '2.4.0');
+  assert.equal(t.backupCalls.length, 0, 'Automatic backup does not need a separate browser download');
+  assert.equal(t.modals[0].config.dismissable, false);
+  assert.match(status(t.modals[0].el), /Installed v2.4.0/);
+  assert.match(t.modals[0].el.textContent, /Recovery backup: C:\\Z Note\\Backups\\notebook.json/);
+  assert.equal(t.listeners.get('beforeunload').size, 0);
+  assert.equal(t.reloads, 1);
+  await button(root, 'Install update automatically').onclick();
+  assert.equal(t.nativeCalls.length, 1, 'The original button cannot replay an installed update');
+  assert.equal(t.reloads, 1);
+});
+
+test('install progress leaves notes frozen and does not reload or settle early', async () => {
+  const installation = deferred();
+  const t = nativeHarness({ install: () => installation.promise });
+  const first = t.updates.installAutomatically({ version: '2.4.0' });
+  assert.equal(t.app.inert, true);
+  assert.equal(t.priorModal.inert, true);
+  assert.equal(t.listeners.get('beforeunload').size, 1);
+  let prevented = false;
+  const unloading = { preventDefault() { prevented = true; } };
+  [...t.listeners.get('beforeunload')][0](unloading);
+  assert.equal(prevented, true);
+  assert.equal(unloading.returnValue, '');
+  await advanceUntil(() => t.nativeCalls.length === 1);
+  await t.updates.installAutomatically({ version: '2.4.0' });
+  assert.equal(t.nativeCalls.length, 1, 'Overlapping install actions share the busy guard');
+  t.nativeCalls[0].onProgress({ stage: 'progress', message: 'Verifying package…' });
+  assert.match(status(t.modals[0].el), /Verifying package/);
+  assert.equal(t.reloads, 0);
+  assert.equal(t.app.inert, true);
+  assert.equal(t.events.includes('resume'), false);
+  installation.resolve({ stage: 'installed', version: '2.4.0', backupPath: 'C:\\backup.json' });
+  await first;
+  assert.equal(t.reloads, 1);
+});
+
+test('other windows and temporary sessions stop before taking a backup or installing', async () => {
+  for (const [options, message] of [
+    [{ otherWindowsOpen: async () => true }, /Close the other Z Note windows/],
+    [{ memoryOnly: true }, /temporary session/]
+  ]) {
+    const t = nativeHarness(options);
+    await t.updates.installAutomatically({ version: '2.4.0' });
+    assert.equal(t.nativeCalls.length, 0);
+    assert.equal(t.events.includes('pause'), false);
+    assert.equal(t.events.includes('checkpoint'), false);
+    assert.equal(t.reloads, 0);
+    assert.match(status(t.modals[0].el), message);
+    assert.equal(t.app.inert, false);
+    assert.equal(t.priorModal.inert, true, 'Pre-existing inert state must be preserved');
+    assert.equal(t.listeners.get('beforeunload').size, 0);
+  }
+});
+
+test('save or export failure restores notes and sync without installing or reloading', async () => {
+  for (const options of [
+    { checkpoint: async () => { throw new Error('Disk quota exceeded'); } },
+    { exportAll: async () => { throw new Error('Picture could not be read'); } }
+  ]) {
+    const t = nativeHarness(options);
+    await t.updates.installAutomatically({ version: '2.4.0' });
+    assert.equal(t.nativeCalls.length, 0);
+    assert.equal(t.reloads, 0);
+    assert.match(status(t.modals[0].el), /Update did not finish: (Disk quota exceeded|Picture could not be read)/);
+    assert.equal(t.app.inert, false);
+    assert.equal(t.priorModal.inert, true);
+    assert.equal(t.events.filter(event => event === 'resume').length, 1);
+    assert.equal(t.listeners.get('beforeunload').size, 0);
+    button(t.modals[0].el, 'Back to my notes').onclick();
+    assert.equal(t.modals[0].closed, true);
+    t.current.checkpoint = async () => {};
+    t.current.exportAll = async () => t.notebook;
+    await t.updates.installAutomatically({ version: '2.4.0' });
+    assert.equal(t.nativeCalls.length, 1, 'A pre-install failure can be retried after it is fixed');
+    assert.equal(t.reloads, 1);
+  }
+});
+
+test('a failed backup reports the saved recovery path and never reloads', async () => {
+  const t = nativeHarness({ installAttempted: false, install: async () => { throw new Error('Backup verification failed'); } });
+  t.nativeState.backupPath = 'C:\\Z Note\\Backups\\recovery.json';
+  await t.updates.installAutomatically({ version: '2.4.0' });
+  assert.equal(t.reloads, 0);
+  assert.match(status(t.modals[0].el), /Backup verification failed/);
+  assert.match(t.modals[0].el.textContent, /Your recovery backup is saved at: C:\\Z Note\\Backups\\recovery.json/);
+  assert.equal(t.app.inert, false);
+  assert.equal(t.events.filter(event => event === 'resume').length, 1);
+  assert.equal(t.listeners.get('beforeunload').size, 0);
+});
+
+test('an earlier installation attempt cannot re-enable the automatic button', async () => {
+  const t = nativeHarness(), root = t.updates.pane();
+  t.nativeState.installAttempted = true;
+  await button(root, 'Check for updates').onclick();
+  assert.equal(button(root, 'Install update automatically').disabled, true);
+  assert.match(automatic(root).textContent, /already been attempted.*reopen Open Z Note.cmd/);
+  assert.equal(t.nativeCalls.length, 0);
+  assert.equal(t.reloads, 0);
+});
+
+test('an uncertain install keeps editing and sync paused and cannot be replayed', async () => {
+  for (const flag of ['uncertain', 'reopenRequired']) {
+    const failure = new Error('The Windows updater connection was interrupted.');
+    failure[flag] = true;
+    const t = nativeHarness({ install: async () => { throw failure; } });
+    t.nativeState.backupPath = 'C:\\Z Note\\Backups\\recovery.json';
+    await t.updates.installAutomatically({ version: '2.4.0' });
+    const modal = t.modals[0].el;
+    assert.match(status(modal), /result could not be confirmed/);
+    assert.match(modal.textContent, /Editing and folder sync are paused/);
+    assert.match(modal.textContent, /reopen Open Z Note.cmd/);
+    assert.match(modal.textContent, /C:\\Z Note\\Backups\\recovery.json/);
+    assert.equal(all(modal, el => el.selector.startsWith('button') && el.textContent === 'Back to my notes').length, 0);
+    assert.equal(t.app.inert, true);
+    assert.equal(t.listeners.get('beforeunload').size, 1);
+    assert.equal(t.listeners.get('keydown').size, 1);
+    assert.equal(t.events.includes('resume'), false);
+    assert.equal(t.reloads, 0);
+    await t.updates.installAutomatically({ version: '2.4.0' });
+    assert.equal(t.nativeCalls.length, 1);
+  }
+});
+
+test('a final save failure keeps the installed app open and restores access to unsaved notes', async () => {
+  let checkpoints = 0;
+  const t = nativeHarness({ checkpoint: async () => {
+    checkpoints++;
+    if (checkpoints === 2) throw new Error('A pending picture could not be saved');
+  } });
+  t.nativeState.backupPath = 'C:\\Z Note\\Backups\\recovery.json';
+  await t.updates.installAutomatically({ version: '2.4.0' });
+  const modal = t.modals[0].el;
+  assert.equal(t.nativeCalls.length, 1, 'Installation completed before the final durability check failed');
+  assert.equal(checkpoints, 2);
+  assert.equal(t.reloads, 0, 'Reloading would discard the unsaved note or picture');
+  assert.match(status(modal), /app update is installed, but your latest notes could not be saved/);
+  assert.match(status(modal), /pending picture.*Keep this window open/);
+  assert.equal(all(modal, el => el.selector.startsWith('button') && el.textContent === 'Reload Z Note').length, 0);
+  assert.equal(t.app.inert, false);
+  assert.equal(t.events.filter(event => event === 'resume').length, 1);
+  assert.equal(t.listeners.get('beforeunload').size, 0);
+  assert.equal(t.listeners.get('keydown').size, 0);
+  button(modal, 'Back to my notes').onclick();
+  assert.equal(t.modals[0].closed, true);
 });

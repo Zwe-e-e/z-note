@@ -24,11 +24,12 @@
     if (!handle) return { connected: false, folderName: '', parentPath: '', notebookPath: S.memoryOnly ? 'Temporary session (not saved)' : 'Browser storage only', fullPath: false };
     const fullPath = !!(saved && saved.handle === handle);
     const parentPath = fullPath ? saved.path : handle.name;
+    const direct = !!(ZN.sync && ZN.sync.direct);
     const separator = fullPath && !parentPath.startsWith('/') ? '\\' : '/';
-    const notebookPath = fullPath
+    const notebookPath = direct ? (fullPath ? parentPath : '… / ' + handle.name) : fullPath
       ? parentPath.replace(/[\\/]+$/, '') + separator + SUB
       : '… / ' + handle.name + ' / ' + SUB;
-    return { connected: true, folderName: handle.name, parentPath, notebookPath, fullPath };
+    return { connected: true, folderName: handle.name, parentPath, notebookPath, fullPath, direct };
   }
   function paint() {
     if (control) {
@@ -123,11 +124,33 @@
         } catch (e) { if (e.name !== 'AbortError') fail(e); }
       } }, 'Locate folder') : null);
     let dialog;
+    if (ZN.sync && ZN.sync.supported && !S.memoryOnly) {
+      if (value.connected) actions.append(h('button.btn.sm', { type: 'button', onclick: async () => {
+        if (busy) return;
+        if (handle !== dir()) { fail(new Error('The source folder changed. Close this dialog and open it again.')); return; }
+        busy = true;
+        status.textContent = 'Syncing this notebook…';
+        try {
+          const ok = await ZN.sync.now();
+          status.textContent = ok ? 'Notebook synced. Wait for OneDrive to finish before switching PCs.' : 'Sync did not finish. ' + ZN.sync.statusText() + '.';
+        } catch (e) { fail(e); }
+        finally { busy = false; }
+      } }, ZN.icon('sync', 15), 'Sync now'));
+      actions.append(h('button.btn.sm', { type: 'button', onclick: async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          if (await ZN.sync.openExisting()) { dialog.close(); open(); }
+        } catch (e) { if (e.name !== 'AbortError') fail(e); }
+        finally { busy = false; }
+      } }, ZN.icon('folder', 15), 'Open existing notebook…'));
+    }
     dialog = ZN.ui.modal({ title: 'Source folder', width: 590,
       body: [
         h('p.modal-text', value.connected ? 'Connected notebook location:' : S.memoryOnly ? 'No source folder is connected. Notes are only kept for this temporary session.' : 'No source folder is connected. Your notes are stored in this browser.'),
         pathBox, actions,
         value.connected ? h('p.set-note', 'Sync: ' + ZN.sync.statusText() + '.') : null,
+        h('p.set-note', 'On another PC, use Open existing notebook and select the same notebook in OneDrive or a shared network folder. You can choose “Z Note notebook” itself or its parent. Each PC must allow folder access. Sync on the first PC, wait for the folder service to finish, then sync on the other PC.'),
         value.connected ? h('div.source-path-edit',
           h('p.set-note', 'Browsers show the folder name but hide its full Windows path. You can use Locate folder to inspect the connected location.'),
           h('label.source-path-label', 'Selected folder’s full path (optional)', input),

@@ -1,6 +1,6 @@
 // Z Note's portable Windows host. No installation, registry entries or power-plan changes.
 // The browser retains its existing file:// URL/storage; this loopback channel exposes
-// only three keep-awake commands. Each socket owns its request on one native thread.
+// keep-awake commands and a separate backup-first application updater.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -76,11 +76,15 @@ namespace ZNote.NativeHost
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private long idleSince;
         private bool disposed;
+        private readonly string page;
+        private readonly bool automaticUpdates;
         internal readonly int Port;
         internal string Token { get { return token; } }
 
-        internal Host()
+        internal Host(string appPage, bool enableAutomaticUpdates)
         {
+            page = appPage;
+            automaticUpdates = enableAutomaticUpdates;
             byte[] bytes = new byte[32];
             using (RandomNumberGenerator random = RandomNumberGenerator.Create()) random.GetBytes(bytes);
             token = BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
@@ -124,7 +128,9 @@ namespace ZNote.NativeHost
                     client.NoDelay = true;
                     client.SendTimeout = IoTimeoutMilliseconds;
                     NetworkStream stream = client.GetStream();
-                    if (!Handshake(stream)) return;
+                    bool update;
+                    if (!Handshake(stream, out update)) return;
+                    if (update) { ServeUpdate(client, stream); return; }
                     SendState(stream, awake, null);
                     long lastPing = clock.ElapsedMilliseconds, pongDue = 0;
                     byte[] expectedPong = null;
@@ -193,8 +199,34 @@ namespace ZNote.NativeHost
             }
         }
 
-        private bool Handshake(NetworkStream stream)
+        private void ServeUpdate(TcpClient client, NetworkStream stream)
         {
+            using (UpdateSession session = new UpdateSession(page, automaticUpdates, delegate(Dictionary<string, object> message) {
+                SendFrame(stream, 1, Encoding.UTF8.GetBytes(UpdateFiles.Json(65536).Serialize(message)));
+            }))
+            {
+                session.Ready();
+                Stopwatch idle = Stopwatch.StartNew();
+                while (!disposed)
+                {
+                    if (!client.Client.Poll(500000, SelectMode.SelectRead))
+                    { if (idle.ElapsedMilliseconds > 180000) return; continue; }
+                    Frame frame = ReadFrame(stream, UpdateSession.MaximumFrame);
+                    idle.Restart();
+                    if (frame.Opcode == 8) { ValidateClose(frame.Payload); SendFrame(stream, 8, frame.Payload); return; }
+                    if (frame.Opcode == 9) { SendFrame(stream, 10, frame.Payload); continue; }
+                    if (frame.Opcode == 10) continue;
+                    string command;
+                    try { command = new UTF8Encoding(false, true).GetString(frame.Payload); }
+                    catch (DecoderFallbackException) { throw new ProtocolException(1007); }
+                    session.Handle(command);
+                }
+            }
+        }
+
+        private bool Handshake(NetworkStream stream, out bool update)
+        {
+            update = false;
             MemoryStream bytes = new MemoryStream();
             Stopwatch deadline = Stopwatch.StartNew();
             int matched = 0;
@@ -217,7 +249,8 @@ namespace ZNote.NativeHost
             string[] request = lines[0].Split(' ');
             if (request.Length != 3 || request[0] != "GET" || request[2] != "HTTP/1.1")
                 return Reject(stream, "400 Bad Request");
-            if (!SameText(request[1], "/awake/" + token)) return Reject(stream, "403 Forbidden");
+            update = SameText(request[1], "/update/" + token);
+            if (!update && !SameText(request[1], "/awake/" + token)) return Reject(stream, "403 Forbidden");
             Dictionary<string, string> headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 1; i < lines.Length - 2; i++)
             {
@@ -295,7 +328,7 @@ namespace ZNote.NativeHost
             }
             return result;
         }
-        private static Frame ReadFrame(NetworkStream stream)
+        private static Frame ReadFrame(NetworkStream stream, int maximum = MaximumFrame)
         {
             Stopwatch deadline = Stopwatch.StartNew();
             byte[] header = ReadExact(stream, 2, deadline);
@@ -311,7 +344,7 @@ namespace ZNote.NativeHost
                 length = (extended[0] << 8) | extended[1];
                 if (length < 126) throw new ProtocolException(1002);
             }
-            if (length > MaximumFrame) throw new ProtocolException(1009);
+            if (length > maximum) throw new ProtocolException(1009);
             byte[] mask = ReadExact(stream, 4, deadline);
             byte[] payload = ReadExact(stream, length, deadline);
             for (int i = 0; i < payload.Length; i++) payload[i] ^= mask[i % 4];
@@ -369,6 +402,8 @@ namespace ZNote.NativeHost
                 }
                 if (!File.Exists(page)) throw new FileNotFoundException("Z Note.html was not found. Keep the app folder beside Z Note.html.");
                 if (infoPath != null && !noBrowser) throw new ArgumentException("--test-info requires --no-browser.");
+                if (!noBrowser && CachedHost.Launch(page)) return 0;
+                if (!noBrowser) CachedHost.Recover(page);
                 string browser = noBrowser ? null : FindBrowser();
                 if (!noBrowser && browser == null)
                 {
@@ -376,7 +411,7 @@ namespace ZNote.NativeHost
                     Process.Start(new ProcessStartInfo(page) { UseShellExecute = true });
                     return 0;
                 }
-                using (Host host = new Host())
+                using (Host host = new Host(page, !noBrowser))
                 {
                     string query = "?zn-awake-port=" + host.Port.ToString(CultureInfo.InvariantCulture) + "&zn-awake-token=" + host.Token;
                     string url = new Uri(page).AbsoluteUri + query;

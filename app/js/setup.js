@@ -28,13 +28,13 @@
       if (dialog) dialog.el.setAttribute('aria-busy', String(value));
     }
 
-    async function chooseFolder() {
+    async function chooseFolder(existing) {
       if (busy) return;
       setBusy(true);
       status.textContent = 'Choose a folder in the browser’s folder picker…';
       try {
         // Call immediately from this click, before awaiting any other work.
-        const ok = await ZN.sync.link();
+        const ok = await (existing === true ? ZN.sync.openExisting() : ZN.sync.link());
         if (!ok) {
           status.textContent = ZN.sync.state === 'error'
             ? 'The folder was selected, but the first save did not finish. Check the folder and try again.'
@@ -47,7 +47,7 @@
         // secondary preference cannot be saved, the handle still skips setup.
         try { await remember('folder'); } catch (e) { console.warn('[Z Note] setup preference', e); }
         dialog.close();
-        ui.toast('Your source folder is ready. Z Note will keep your notebook in “' + ZN.sync.dir.name + '” / Z Note notebook.');
+        ui.toast('Your source folder is ready. Z Note will keep your notebook in “' + ZN.sync.dir.name + '”' + (ZN.sync.direct ? '.' : ' / Z Note notebook.'));
       } catch (e) {
         status.textContent = e && e.name === 'AbortError'
           ? 'No folder selected. You can try again or use browser storage.'
@@ -77,8 +77,11 @@
     }
 
     if (canUseFolder) controls.append(h('button.btn.primary', {
-      type: 'button', autofocus: true, onclick: chooseFolder
+      type: 'button', autofocus: true, onclick: () => chooseFolder(false)
     }, ZN.icon('folder', 17), 'Choose source folder'));
+    if (canUseFolder) controls.append(h('button.btn', {
+      type: 'button', onclick: () => chooseFolder(true)
+    }, ZN.icon('folder', 17), 'Open existing notebook…'));
     controls.append(h('button.btn' + (canUseFolder ? '.quiet' : '.primary'), {
       type: 'button', autofocus: !canUseFolder, onclick: browserOnly
     }, S.memoryOnly ? 'Continue for this session' : 'Use browser storage'));
@@ -90,11 +93,11 @@
         canUseFolder ? h('div.setup-folder',
           h('div.setup-folder-title', ZN.icon('folder', 24), h('strong', 'Z Note notebook')),
           h('p', 'Choose a location on your device. Z Note creates this source folder inside it and saves your pages and pictures there.'),
-          h('p', 'Already have a Z Note notebook? Choose the folder that contains it to reconnect.')) : null,
+          h('p', 'Using another PC? Choose Open existing notebook and select “Z Note notebook” itself or the folder containing it. Wait for OneDrive to finish downloading the notebook first.')) : null,
         S.memoryOnly
           ? h('p.modal-text', 'This browser is blocking saved storage. Open Z Note in a normal browser window to set up a source folder. If you continue here, download a backup before closing: this session’s notes will not be kept.')
           : canUseFolder
-            ? h('p.modal-text', 'Your notebook stays in this browser and the folder you choose. A folder inside OneDrive or another desktop sync service can also keep your devices in sync.')
+            ? h('p.modal-text', 'Your notebook stays in this browser and the folder you choose. Use the same OneDrive or shared network folder on each PC. Press Sync now before switching PCs, wait for the folder service to finish, and sync again on the other PC.')
             : h('p.modal-text', 'This browser cannot save directly to a folder. You can use browser storage and download backup files, or open Z Note in desktop Chrome or Edge to choose a source folder.'),
         !S.memoryOnly ? h('p.setup-hint', 'Browser storage belongs to this browser on this device. Clearing site data removes it, so keep a folder copy or download backups in Style & data → Sync & backup.') : null,
         status, controls,

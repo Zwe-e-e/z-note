@@ -1,5 +1,5 @@
 Z NOTE - PORTABLE BROWSER APP
-Version 2.3.0 - released 23 November 2026
+Version 2.4.0 - released 23 November 2026
 Check your installed version at the bottom of the sidebar or in Style & data.
 Use "Check for updates" in the sidebar or Style & data > Updates.
 
@@ -7,14 +7,16 @@ GET STARTED
 1. Extract the ZIP completely. Keep the whole "Z Note" folder together.
    Do not run the app from inside the ZIP preview.
 2. On Windows, double-click "Open Z Note.cmd". It opens Z Note in Chrome
-   or Edge in its own window, with background Keep Awake support.
+   or Edge in its own window, with background Keep Awake and automatic updates.
    You can also open "Z Note.html" directly in a desktop browser, with
-   visible-window Keep Awake only. No installer or account is needed.
+   visible-window Keep Awake and manual updates. No installer or account is needed.
 3. In the first-run setup dialog, click "Choose source folder".
 4. Select the extracted "Z Note" folder (the folder containing this file),
    or another location where you want to keep your notebook.
 5. Allow the browser to access that folder. Z Note creates a new
    "Z Note notebook" folder inside it for your pages and pictures.
+   Already have notes on another PC? Use "Open existing notebook" instead,
+   then select "Z Note notebook" itself or the folder containing it.
 
 The app files work offline after extraction. Keep the app subfolder beside
 Z Note.html. Screen capture and folder access still depend on your browser
@@ -25,8 +27,8 @@ Your notes are stored in this browser on this device. Choosing a source folder
 also keeps a file copy in "Z Note notebook". Your private notes are not included
 in the public download and are not sent to the Z Note GitHub repository.
 
-If you already have a "Z Note notebook" folder, choose the folder CONTAINING
-it, not "Z Note notebook" itself. Z Note will reconnect to that notebook.
+If you already have a "Z Note notebook" folder, use "Open existing notebook".
+Choose that folder itself OR the folder containing it. Z Note reconnects to it.
 When both places hold notes, follow the app's choices to combine or use the
 folder's notebook.
 
@@ -36,9 +38,10 @@ folder access. You can manage the folder and download or restore a backup in:
 
 SOURCE FOLDER LOCATION
 The bottom of the sidebar shows your source folder and "Z Note notebook".
-Click it for the full details, Copy location, and Locate folder.
+Click it for the full details, Copy location, Locate folder, Sync now,
+and Open existing notebook.
 Browsers hide the complete Windows path. To display it, paste the selected
-parent folder's path from File Explorer into "Selected folder's full path".
+folder's path from File Explorer into "Selected folder's full path".
 This optional label stays in this browser; it does not move your notes or
 change the folder connection.
 
@@ -48,15 +51,24 @@ backups regularly. If storage is blocked, the app offers a temporary session;
 download a backup before closing it.
 
 MOVING TO ANOTHER COMPUTER
-Keep a backup before moving or updating. Copy both the app folder and your
-"Z Note notebook" folder to the new computer, then choose its containing
-folder during setup. Alternatively, download a backup on the old computer
-and restore it through Style & data > Sync & backup on the new computer.
+Open Z Note on the other PC and choose "Open existing notebook" in setup,
+Source folder, or Style & data > Sync & backup. Select "Z Note notebook"
+itself or its parent. Allow folder access in the browser on each PC.
 
-You may choose a folder managed by OneDrive or another desktop sync service
-to share a notebook between your own computers. That service must finish
-syncing between edits. Concurrent changes to the same page can overwrite
-each other: the newer change wins.
+For changes to travel between PCs, use the same notebook in OneDrive,
+another desktop sync service, or a shared network folder:
+1. On the first PC, press "Sync now" in Source folder or Sync & backup.
+2. Wait for OneDrive or your folder service to finish uploading.
+3. On the other PC, wait for the files to finish downloading, then press
+   "Sync now" in Z Note to load the changes.
+
+Work on one PC at a time. Concurrent changes to the same page can overwrite
+each other: the newer change wins. A one-time folder copy moves your notes
+but does not carry later changes between PCs.
+
+You can also download a backup on the old computer and restore it through
+Style & data > Sync & backup on the new computer. Browser storage and folder
+permissions are separate on each PC; they do not travel with the app folder.
 
 SHARING AND UPDATING
 Share the original "Z-Note-Portable.zip" download with other people. Each
@@ -68,9 +80,23 @@ GitHub release. Internet access is needed only for the check and download.
 If the check fails, retry later or use the official releases page. Your notes,
 pictures and source-folder path are not sent to GitHub.
 
-The update screen guides you through these steps. It does not install files
-or restart the app automatically.
-1. Click "Download a backup". Check that the JSON file has finished saving
+AUTOMATIC UPDATES ON WINDOWS
+From v2.4.0 onward, open "Open Z Note.cmd". When a newer release is available,
+click "Install update automatically". Close other Z Note windows and keep
+this window open while it works. Z Note saves a recovery backup on your PC
+and shows the full backup path, checks the official download, replaces the
+app files in the same location, and reloads after installation finishes.
+Your notes, pictures, source-folder connection and settings are kept.
+
+Keep the recovery backup until you have checked your notes. If the update
+result cannot be confirmed, follow the on-screen instruction to close Z Note
+and reopen "Open Z Note.cmd" so the launcher can finish recovery.
+
+ONE-TIME UPGRADE FROM OLDER VERSIONS / MANUAL UPDATES
+v2.3.0 and older need one manual update to v2.4.0 to get the new launcher.
+After that, future releases can use the automatic button. These manual steps
+also apply when opening the HTML directly or when the launcher is unavailable.
+1. Click "Download a backup first". Check that the JSON file has finished saving
    on your PC, then tick the backup confirmation and download the update ZIP.
 2. Close all Z Note windows and extract the ZIP into a separate folder.
 3. Copy the new app files into your original Z Note app folder, replacing
@@ -79,10 +105,12 @@ or restart the app automatically.
 4. Reopen from the same location using the same browser profile. Check your
    pages and pictures before removing any old copies or backups.
 
-If you choose a new app location, reconnect the parent folder CONTAINING
-"Z Note notebook". If your notes were kept only in browser storage, restore
-your JSON backup through Style & data > Sync & backup > Restore from a file,
-then choose "Add to my notebook". Copying the app does not copy browser data.
+Keep the same app location and browser profile to retain notes and folder
+settings. If you choose a new app location, use "Open existing notebook"
+and select "Z Note notebook" itself or its parent. If your notes were kept
+only in browser storage, restore your JSON backup through Style & data >
+Sync & backup > Restore from a file, then choose "Add to my notebook".
+Copying the app does not copy browser data.
 
 For the hosted web app, save a backup first, then refresh the page in the same
 browser profile. The hosted and downloaded apps use separate browser storage;

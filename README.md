@@ -1,6 +1,6 @@
 # Z Note
 
-**Current release: [v2.3.0](https://github.com/ZweWH/z-note/releases/tag/v2.3.0)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
+**Current release: [v2.4.0](https://github.com/ZweWH/z-note/releases/tag/v2.4.0)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
 
 Your installed version appears at the bottom of the app sidebar and in the **Style & data** title. Use **Check for updates** in the sidebar, or **Style & data → Updates**, to check for a newer release.
 
@@ -12,14 +12,14 @@ A portable notebook you download to your PC and open in your own browser. Notes,
 
 1. Download **Z-Note-Portable.zip** and choose **Extract All**. Do not run the app from inside the ZIP.
 2. Save the extracted **Z Note** folder wherever you want on your PC.
-3. On Windows, double-click **Open Z Note.cmd**. It opens your own Chrome or Edge browser in a dedicated window and enables background Keep Awake. You can also open **Z Note.html** directly, with visible-window Keep Awake only.
-4. In the first-run dialog, click **Choose source folder** and select that extracted **Z Note** folder. Allow the browser to save files. The app creates a **Z Note notebook** subfolder for your pages and pictures.
+3. On Windows, double-click **Open Z Note.cmd**. It opens your own Chrome or Edge browser in a dedicated window and enables background Keep Awake and automatic app updates. You can also open **Z Note.html** directly, with visible-window Keep Awake and manual app updates.
+4. In the first-run dialog, click **Choose source folder** and select that extracted **Z Note** folder. Allow the browser to save files. The app creates a **Z Note notebook** subfolder for your pages and pictures. To reconnect notes from another PC, use **Open existing notebook…** and select **Z Note notebook** itself or its parent folder.
 
 No installer, account or development tools are needed. The extracted app works offline. Keep the `app` folder beside `Z Note.html`. The Windows launcher uses the .NET Framework included with Windows 10/11.
 
 ```text
 Z Note/
-  Open Z Note.cmd      ← open this on Windows for background Keep Awake
+  Open Z Note.cmd      ← Windows: background Keep Awake and automatic updates
   Z Note.html          ← direct browser entry (visible-window Keep Awake)
   START HERE.txt
   app/
@@ -32,11 +32,17 @@ Each person gets their own notebook. The shared download contains application fi
 
 Choose a folder when setting up so your notes are saved as files as well as in browser storage. If the browser asks for permission again later, use **Allow** to reconnect it.
 
-The sidebar shows **Source folder** and the notebook location. Click it to copy the location, locate the connected folder, or manage backups. Browsers expose the folder name rather than its full Windows path. You can paste the selected parent folder's full path from File Explorer into the details dialog; this optional display label stays in that browser and does not change where notes are saved.
+The sidebar shows **Source folder** and the notebook location. Click it to copy the location, locate the connected folder, sync now, or open an existing notebook. Browsers expose the folder name rather than its full Windows path. You can paste the selected folder's full path from File Explorer into the details dialog; this optional display label stays in that browser and does not change where notes are saved.
 
-To open an existing notebook or move it to another PC, copy the whole folder and select the parent that contains **Z Note notebook**. If setup has already been completed, use **Style & data → Sync & backup → Choose the sync folder**. Wait until syncing finishes before copying the notebook folder.
+To open an existing notebook, use **Open existing notebook…** in setup, the Source folder dialog, or **Style & data → Sync & backup**. Select **Z Note notebook** itself or the folder containing it. Z Note reconnects to its pages and pictures. If this browser already contains your own notes, the app asks how to combine them with the folder's notebook.
 
-A folder in OneDrive or another desktop sync service can carry the files between your computers. Z Note itself does not provide cloud accounts or real-time collaboration; if the same page is edited on two computers before syncing, the newer change wins.
+A folder in OneDrive or a shared network folder can carry changes between your computers:
+
+1. Connect each PC to the same notebook using **Open existing notebook…**. Allow folder access in each browser.
+2. Before switching PCs, press **Sync now** in Source folder or **Style & data → Sync & backup**. If using OneDrive or another sync service, wait for it to finish uploading.
+3. On the other PC, wait for the files to finish downloading, then press **Sync now** in Z Note.
+
+A one-time folder copy moves the notebook but does not carry later changes. Z Note does not provide its own cloud account or real-time collaboration. Work on one PC at a time; if the same page is edited on two PCs before syncing, the newer change wins.
 
 You can choose browser storage instead. Those notes belong to that browser profile and are not automatically included when you copy the app folder. Clearing browser data can remove them. Download a backup from **Style & data → Sync & backup** and restore it on the other PC.
 
@@ -46,16 +52,20 @@ The local app and the previously hosted app use separate browser storage. To tra
 
 Click **Check for updates** in the sidebar, or open **Style & data → Updates**. The check contacts the public Z Note GitHub repository only when you request it. It compares your installed version with the latest stable release and shows whether an update is available. If you are offline or GitHub cannot be reached, retry later or open the official releases page.
 
-The app guides you through saving a backup before downloading an update. A browser cannot replace the installed app files automatically.
+With **v2.4.0 or later**, open Z Note through **Open Z Note.cmd** on Windows. When a newer version is available, click **Install update automatically**. Close other Z Note windows and keep this window open until the update finishes. Z Note saves a recovery backup on your PC, shows its full path, verifies the official download, replaces the app files in the same location, and reloads. Your notes, pictures, source-folder connection and display settings stay in place. No manual ZIP replacement or saved-backup checkbox is needed for this route.
 
-1. Click **Download a backup** and confirm the JSON file has finished saving on your PC. Only then tick the backup confirmation and download the update ZIP.
+Automatic installation requires working browser storage and the Windows launcher. If the update result cannot be confirmed, follow the on-screen instruction to close and reopen **Open Z Note.cmd** so recovery can finish. Keep the recovery backup until you have checked your notebook.
+
+**Upgrading from v2.3.0 or earlier requires one manual update to v2.4.0.** This adds the new Windows launcher; future releases can install from the button. The manual steps also remain available when opening the HTML directly or when the launcher cannot connect:
+
+1. Click **Download a backup first** and confirm the JSON file has finished saving on your PC. Only then tick the backup confirmation and download the update ZIP.
 2. Close all Z Note windows. Extract the ZIP into a separate temporary folder.
 3. Copy the new application files into your original **Z Note** app folder, replacing the matching app files. Keep your existing **Z Note notebook** folder and all backups; do not delete the original folder to install the update.
 4. Reopen Z Note from the same location with the same browser profile. Check that your pages and pictures are present before removing any old copies or backups.
 
-If you prefer to keep the updated app in a new location, reconnect the **parent folder containing Z Note notebook** through setup or **Style & data → Sync & backup**. For notes kept only in browser storage, restore the saved JSON backup through **Restore from a file… → Add to my notebook**. Browser storage does not travel with a copied application folder.
+Keeping the same app location and browser profile retains browser notes and folder settings. If you choose a new app location or another PC, use **Open existing notebook…** to reconnect **Z Note notebook** or its parent. For notes kept only in browser storage, restore the saved JSON backup through **Restore from a file… → Add to my notebook**. Browser storage and folder permissions do not travel with a copied application folder.
 
-For the hosted web app, save a backup first, then refresh the page in the same browser profile to load website updates. Moving between the hosted app and the downloaded app uses separate browser storage, so reconnect your notebook folder or restore the backup. An update check does not reload the app, replace files, or erase notes.
+For the hosted web app, save a backup first, then refresh the page in the same browser profile to load website updates. Moving between the hosted app and the downloaded app uses separate browser storage, so reconnect your notebook folder or restore the backup. Checking for updates alone does not install anything or reload the app.
 
 ## Browser features
 
@@ -82,7 +92,8 @@ node --test tests/awake.test.cjs
 node --test tests/native-bridge.test.cjs tests/awake-native-integration.test.cjs
 node --test tests/setup.test.cjs
 node --test tests/source-folder.test.cjs
-node --test tests/updates.test.cjs tests/backup.test.cjs
+node --test tests/updates.test.cjs tests/update-native.test.cjs tests/backup.test.cjs
+node --test tests/sync.test.cjs tests/checkpoint.test.cjs tests/auto-update.test.cjs
 ```
 
 To build and test the Windows helper, then rebuild the portable ZIP in PowerShell:
@@ -90,6 +101,7 @@ To build and test the Windows helper, then rebuild the portable ZIP in PowerShel
 ```powershell
 powershell -NoProfile -File scripts/build-native.ps1
 powershell -NoProfile -File tests/test-native.ps1
+powershell -NoProfile -File tests/test-native-update.ps1
 node --test tests/native-awake.test.cjs
 powershell -NoProfile -File scripts/package-portable.ps1
 ```

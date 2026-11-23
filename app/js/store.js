@@ -9,6 +9,8 @@
   const blobURLs = new Map();
   const memBlobs = new Map();
   let saveTimer = null, settingsTimer = null, kidIndex = null, memoryOnly = false, channel = null;
+  const pendingPageWrites = new Set();
+  const pendingDataWork = new Set();
   const winId = U.uid();
 
   const TREE_KEYS = ['title', 'icon', 'fav', 'parentId', 'order', 'trashed', 'color', 'type'];
@@ -235,8 +237,11 @@
     if (memoryOnly) { emit('save', 'saved'); return; }
     const puts = [], dels = [];
     ids.forEach(id => { const p = pages.get(id); if (p) puts.push(p); else dels.push(id); });
+    let writing;
     try {
-      await db.batch('pages', puts, dels);
+      writing = db.batch('pages', puts, dels);
+      pendingPageWrites.add(writing);
+      await writing;
     } catch (e) {
       ids.forEach(i => dirty.add(i));
       console.error('[Z Note] save failed', e);
@@ -244,10 +249,49 @@
       clearTimeout(saveTimer);
       saveTimer = setTimeout(flush, 4000);
       return;
-    }
+    } finally { if (writing) pendingPageWrites.delete(writing); }
     if (!dirty.size) emit('save', 'saved');
     if (channel) try { channel.postMessage({ t: 'saved', from: winId, ids }); } catch (e) {}
     emit('flushed', ids);
+  }
+
+  // Automatic updates may reload only after page transactions and settings are
+  // durable. The normal autosave reports errors in the UI instead of rejecting.
+  async function checkpoint() {
+    if (memoryOnly) throw new Error('This is a temporary session. Save a backup and reopen Z Note in a browser with storage before installing updates.');
+    do {
+      do {
+        if (pendingDataWork.size) await Promise.all(Array.from(pendingDataWork));
+        // Callers insert a saved image into its page after awaiting addImage.
+        // Let those continuations run before flushing the resulting page edits.
+        await Promise.resolve();
+      } while (pendingDataWork.size);
+      await flush();
+      while (pendingPageWrites.size) await Promise.all(Array.from(pendingPageWrites));
+      if (dirty.size) throw new Error('Some notes could not be saved. Keep Z Note open and retry before updating.');
+    } while (pendingDataWork.size);
+    clearTimeout(settingsTimer);
+    await db.put('meta', JSON.parse(JSON.stringify(S.settings)), 'settings');
+    if (dirty.size || pendingPageWrites.size || pendingDataWork.size) throw new Error('Notes or pictures changed while preparing the update. Please try again.');
+  }
+
+  function trackDataWork(task) {
+    const work = task();
+    pendingDataWork.add(work);
+    work.then(() => pendingDataWork.delete(work), () => pendingDataWork.delete(work));
+    return work;
+  }
+
+  function otherWindowsOpen() {
+    if (!channel) return Promise.resolve(false);
+    return new Promise(resolve => {
+      let found = false;
+      const off = on('otherwindow', () => { found = true; });
+      // Older Z Note releases already answer hello with here. Probe afresh;
+      // the historical otherWindow flag remains true after a window closes.
+      channel.postMessage({ t: 'hello', from: winId });
+      setTimeout(() => { off(); resolve(found); }, 1000);
+    });
   }
 
   function saveSettings() {
@@ -279,12 +323,12 @@
     emit('external', changed);
     return changed;
   }
-  async function putBlobRecord(rec) {
+  function putBlobRecord(rec) { return trackDataWork(async () => {
     if (memoryOnly) memBlobs.set(rec.id, rec); else await db.put('blobs', rec);
     const url = blobURLs.get(rec.id);
     if (url) { URL.revokeObjectURL(url); blobURLs.delete(rec.id); }
     emit('blobs');
-  }
+  }); }
   /* forget everything stored on this PC (used when this PC takes over the notebook found in a sync folder) */
   async function wipeLocal() {
     clearTimeout(saveTimer);
@@ -351,7 +395,7 @@
   }
 
   /* ---------- images ---------- */
-  async function addImage(blob, meta) {
+  function addImage(blob, meta) { return trackDataWork(async () => {
     const size = await U.imageSize(blob);
     const rec = Object.assign({
       id: U.uid(), blob, mime: blob.type || 'image/png', size: blob.size,
@@ -360,7 +404,7 @@
     if (memoryOnly) memBlobs.set(rec.id, rec); else await db.put('blobs', rec);
     emit('blobs');
     return rec;
-  }
+  }); }
   async function getBlob(id) {
     if (!id) return null;
     if (memoryOnly) return memBlobs.get(id) || null;
@@ -382,14 +426,14 @@
     return all.sort((a, b) => b.created - a.created);
   }
   /* o.remote = the deletion arrived from another PC through sync, so it is not recorded again */
-  async function delBlob(id, o) {
+  function delBlob(id, o) { return trackDataWork(async () => {
     if (memoryOnly) memBlobs.delete(id); else await db.del('blobs', id);
     if (!(o && o.remote)) { S.settings.tomb['i:' + id] = Date.now(); saveSettings(); }
     const url = blobURLs.get(id);
     if (url) { URL.revokeObjectURL(url); blobURLs.delete(id); }
     emit('blobs');
-  }
-  async function updateBlob(id, patch) {
+  }); }
+  function updateBlob(id, patch) { return trackDataWork(async () => {
     const rec = await getBlob(id);
     if (!rec) return null;
     Object.assign(rec, patch, { mod: Date.now() });
@@ -397,7 +441,7 @@
     if ('blob' in patch) { const url = blobURLs.get(id); if (url) { URL.revokeObjectURL(url); blobURLs.delete(id); } }
     emit('blobs');
     return rec;
-  }
+  }); }
 
   /* fill an <img> from an image id; marks it .missing when the image was deleted */
   function setImg(img, id) {
@@ -414,7 +458,7 @@
     pages, settings: defaults(), ready: false, memoryOnly: false, otherWindow: false, winId,
     blank, defaults,
     on, off, emit,
-    init, flush, saveSettings, setSetting,
+    init, flush, checkpoint, otherWindowsOpen, saveSettings, setSetting,
     get, children, notebooks, isLive, live, path, notebookOf, descendants, trashed, ensureNotebook,
     create, update, touch, trash, restore, purge, move, duplicate, visit,
     addImage, getBlob, blobURL, listBlobs, delBlob, updateBlob, setImg,

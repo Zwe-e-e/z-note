@@ -55,8 +55,9 @@ function harness(options = {}) {
   const sync = {
     supported: options.supported !== false,
     dir: options.linked ? { name: 'Existing folder' } : null,
-    state: 'none', calls: 0, unlinks: 0,
+    state: 'none', calls: 0, existingCalls: 0, unlinks: 0,
     async link() { this.calls++; if (this.onLink) return this.onLink(); this.dir = { name: 'Selected folder' }; this.state = 'ready'; return true; },
+    async openExisting() { this.existingCalls++; this.direct = true; this.dir = { name: 'Z Note notebook' }; this.state = 'ready'; return true; },
     async unlink() { this.unlinks++; this.dir = null; this.state = 'none'; }
   };
   const db = {
@@ -109,6 +110,17 @@ test('existing linked folders and completed setup skip the first-run dialog', as
     assert.equal(h.opened, 0);
     assert.equal(h.sync.calls, 0);
   }
+});
+
+test('other-PC setup opens an existing notebook without using the create action', async () => {
+  const h = harness();
+  await h.setup.init();
+  await h.button('Open existing notebook…').onclick();
+  assert.equal(h.sync.existingCalls, 1);
+  assert.equal(h.sync.calls, 0);
+  assert.equal(h.modal, null);
+  assert.equal(h.meta.get('setup').mode, 'folder');
+  assert.equal(h.app.inert, false);
 });
 
 test('cancelling the folder picker leaves setup open without marking complete', async () => {

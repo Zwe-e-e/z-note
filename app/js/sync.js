@@ -15,25 +15,38 @@
   const SAFE_ID = /^[a-z0-9]{4,40}$/i;
   const SAFE_IMG = /^[a-z0-9]{4,40}\.(png|jpg|gif|webp)$/i;
 
-  let busy = false, again = false, banner = null;
+  let busy = false, banner = null, paused = 0, scheduledRun = null;
+  let operations = Promise.resolve();
   const pageCache = new Map();     // file name → { lm, size, id, mod }
   const imgCache = new Map();      // file name → { lm, size, meta }
 
   const sync = (ZN.sync = {
     supported: typeof window.showDirectoryPicker === 'function',
     dir: null,           // the folder the user chose
+    direct: false,       // selected Z Note notebook itself instead of its parent
     state: 'none',       // none · ready · locked (the browser wants a click first) · error
     lastAt: 0,
     lastError: ''
   });
 
   /* ---------- small file helpers ---------- */
-  async function permission(ask) {
+  function exclusive(task) {
+    const result = operations.then(async () => {
+      busy = true; S.emit('sync');
+      try { return await task(); }
+      finally { busy = false; S.emit('sync'); }
+    });
+    operations = result.catch(() => {});
+    return result;
+  }
+  async function permission(ask, handle) {
+    handle = handle || sync.dir;
+    if (!handle) return 'locked';
     try {
-      if (!sync.dir.queryPermission) return 'ready';
+      if (!handle.queryPermission) return 'ready';
       const o = { mode: 'readwrite' };
-      if ((await sync.dir.queryPermission(o)) === 'granted') return 'ready';
-      if (ask && (await sync.dir.requestPermission(o)) === 'granted') return 'ready';
+      if ((await handle.queryPermission(o)) === 'granted') return 'ready';
+      if (ask && (await handle.requestPermission(o)) === 'granted') return 'ready';
     } catch (e) { console.warn('[Z Note] sync folder permission', e); }
     return 'locked';
   }
@@ -47,13 +60,26 @@
   const writeJSON = (dir, name, obj) => writeFile(dir, name, new Blob([JSON.stringify(obj)], { type: 'application/json' }));
   async function readJSON(dir, name) { return JSON.parse(await (await (await dir.getFileHandle(name)).getFile()).text()); }
   async function remove(dir, name) { try { await dir.removeEntry(name); } catch (e) { /* already gone */ } }
-  async function folders() {
-    const root = await sync.dir.getDirectoryHandle(SUB, { create: true });
+  async function folders(handle, direct, create) {
+    handle = handle || sync.dir;
+    if (direct === undefined) direct = sync.direct;
+    if (create === undefined) create = true;
+    const root = direct ? handle : await handle.getDirectoryHandle(SUB, { create });
     return {
-      pages: await root.getDirectoryHandle('pages', { create: true }),
-      images: await root.getDirectoryHandle('images', { create: true }),
-      deleted: await root.getDirectoryHandle('deleted', { create: true })
+      pages: await root.getDirectoryHandle('pages', { create }),
+      images: await root.getDirectoryHandle('images', { create }),
+      deleted: await root.getDirectoryHandle('deleted', { create })
     };
+  }
+
+  async function locate(handle, existing) {
+    const direct = handle.name === SUB;
+    try { return { direct, folders: await folders(handle, direct, false) }; }
+    catch (e) {
+      if (e.name !== 'NotFoundError') throw e;
+      if (existing) throw new Error('No complete Z Note notebook was found. Choose “Z Note notebook” or the folder containing it, and wait for OneDrive to finish downloading its files.');
+      return { direct, folders: null };
+    }
   }
 
   /* what the folder holds: page id → { mod, name, extra: [older duplicate files, e.g. OneDrive conflict copies] } */
@@ -63,7 +89,7 @@
       if (hnd.kind !== 'file' || !/\.json$/i.test(name)) continue;
       seen.add(name);
       let f;
-      try { f = await hnd.getFile(); } catch (e) { continue; }
+      try { f = await hnd.getFile(); } catch (e) { throw new Error('A notebook page is not readable yet. Wait for the folder service to finish, then sync again.'); }
       let c = pageCache.get(name);
       if (!c || c.lm !== f.lastModified || c.size !== f.size) {
         try {
@@ -71,7 +97,7 @@
           if (!raw || !SAFE_ID.test(String(raw.id))) continue;
           c = { lm: f.lastModified, size: f.size, id: String(raw.id), mod: modOf(raw) };
           pageCache.set(name, c);
-        } catch (e) { continue; }                 // still arriving or unreadable: look again next time
+        } catch (e) { throw new Error('A notebook page is incomplete. Wait for the folder service to finish, then sync again.'); }
       }
       const cur = out.get(c.id);
       if (!cur) out.set(c.id, { mod: c.mod, name, extra: [] });
@@ -89,7 +115,7 @@
       if (hnd.kind !== 'file' || !/\.json$/i.test(name)) continue;
       seen.add(name);
       let f;
-      try { f = await hnd.getFile(); } catch (e) { continue; }
+      try { f = await hnd.getFile(); } catch (e) { throw new Error('Picture information is not readable yet. Wait for the folder service to finish, then sync again.'); }
       let c = imgCache.get(name);
       if (!c || c.lm !== f.lastModified || c.size !== f.size) {
         try {
@@ -97,7 +123,7 @@
           if (!meta || !SAFE_ID.test(String(meta.id)) || !SAFE_IMG.test(String(meta.file))) continue;
           c = { lm: f.lastModified, size: f.size, meta };
           imgCache.set(name, c);
-        } catch (e) { continue; }
+        } catch (e) { throw new Error('Picture information is incomplete. Wait for the folder service to finish, then sync again.'); }
       }
       const id = String(c.meta.id), mod = modOf(c.meta);
       const cur = out.get(id);
@@ -122,12 +148,8 @@
   }
 
   /* ---------- one round of syncing ---------- */
-  async function run() {
-    if (!sync.dir || sync.state === 'locked' || sync.state === 'none') return false;
-    if (busy) { again = true; return false; }
-    busy = true;
-    again = false;
-    S.emit('sync');
+  async function performRun() {
+    if (paused || !sync.dir || sync.state === 'locked' || sync.state === 'none') return false;
     let ok = false;
     try {
       await S.flush();
@@ -166,7 +188,7 @@
           try {
             const pg = ZN.settings.normalizePage(await readJSON(f.pages, r.name));
             if (pg && pg.id === id) puts.push(pg);
-          } catch (e) { /* not readable yet: next round */ }
+          } catch (e) { throw new Error('A notebook page changed while syncing. Wait for the folder service to finish, then sync again.'); }
         }
       }
       S.pages.forEach(p => { if (!remote.has(p.id) && dead('p', p.id, modOf(p)) && dels.indexOf(p.id) < 0) dels.push(p.id); });
@@ -187,7 +209,7 @@
 
       /* 3 · pictures, the same way */
       const rImgs = await scanImages(f.images);
-      const have = new Map((await S.listBlobs()).map(b => [b.id, b]));
+      const have = new Map((S.memoryOnly ? await S.listBlobs() : await db.all('blobs')).map(b => [b.id, b]));
       for (const [id, r] of Array.from(rImgs)) {
         const l = have.get(id);
         if (dead('i', id, r.mod)) {
@@ -208,7 +230,7 @@
             };
             await S.putBlobRecord(rec);
             have.set(id, rec);
-          } catch (e) { /* the picture file itself has not arrived yet: next round */ }
+          } catch (e) { throw new Error('A picture has not finished downloading or could not be saved. Wait for the folder service to finish, then sync again.'); }
         }
       }
       for (const [id, l] of have) {
@@ -233,12 +255,14 @@
       console.error('[Z Note] sync did not finish', e);
       if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) { sync.state = 'locked'; showBanner(); }
       else { sync.state = 'error'; sync.lastError = (e && e.message) || String(e); }
-    } finally {
-      busy = false;
-      S.emit('sync');
-      if (again) later();
     }
     return ok;
+  }
+  function run() {
+    if (paused) return Promise.resolve(false);
+    if (scheduledRun) return scheduledRun;
+    scheduledRun = exclusive(() => { scheduledRun = null; return performRun(); });
+    return scheduledRun;
   }
   const later = U.debounce(() => { if (sync.dir) run(); }, 3500);
   const soon = U.debounce(() => { if (sync.dir) run(); }, 1200);
@@ -248,7 +272,9 @@
   function localPristine() {
     const st = S.settings;
     if (!st.seedAt || Object.keys(st.tomb || {}).length) return false;
-    for (const p of S.pages.values()) if (modOf(p) > st.seedAt + 1500) return false;
+    // Seeding records seedAt after creating every example. Even a quick edit
+    // immediately after setup must keep the local notebook out of adoption.
+    for (const p of S.pages.values()) if (modOf(p) > st.seedAt) return false;
     return true;
   }
 
@@ -260,11 +286,10 @@
         title: 'That folder already holds a notebook', width: 520,
         body: [
           h('p.modal-text', 'It has ' + count + (count === 1 ? ' page' : ' pages') + ', and this PC has pages of its own too.'),
-          h('p.modal-text', h('b', 'Combine both'), ' keeps everything from both. ', h('b', 'Use the folder’s notebook'), ' replaces what is on this PC — pages that exist only here would be lost.')
+          h('p.modal-text', h('b', 'Combine both'), ' keeps pages unique to either notebook. When the same page was edited in both places, its newer copy wins. Save a backup first if both PCs have edited the same pages.')
         ],
         buttons: [
           { label: 'Cancel', quiet: true },
-          { label: 'Use the folder’s notebook', danger: true, onClick: () => pick('adopt') },
           { label: 'Combine both', primary: true, onClick: () => pick('merge') }
         ],
         onClose: () => resolve(picked)
@@ -272,72 +297,110 @@
     });
   }
 
-  /* start syncing with a folder. o.choice ('merge' | 'adopt') skips the question. */
+  /* All location changes share the sync queue so a running round cannot write
+     pages from one connection into the newly selected folder. */
   async function attach(handle, o) {
     o = o || {};
-    const before = sync.dir, beforeState = sync.state;
-    sync.dir = handle;
+    if (!handle || handle.kind !== 'directory') throw new Error('Choose a folder for your notebook.');
+    if ((await permission(true, handle)) !== 'ready') throw new Error('Z Note was not allowed to use that folder.');
+    return exclusive(() => attachNow(handle, o));
+  }
+  async function attachNow(handle, o) {
+    if (paused) throw new Error('An app update is in progress. Try connecting the notebook again when it finishes.');
+    const before = sync.dir, beforeState = sync.state, beforeDirect = sync.direct;
+    let locationSaved = false;
     try {
-      if ((await permission(true)) !== 'ready') throw new Error('Z Note was not allowed to use that folder.');
-      const f = await folders();
+      const view = ZN.shell && ZN.shell.view();
+      if (view && view.prepareExport) await view.prepareExport();
+      const location = await locate(handle, !!o.existing);
       pageCache.clear();
       imgCache.clear();
-      const remote = await scanPages(f.pages);
+      const remote = location.folders ? await scanPages(location.folders.pages) : new Map();
       let choice = o.choice || 'merge';
+      const pristine = localPristine() && !(S.memoryOnly ? await S.listBlobs() : await db.all('blobs')).length;
       if (remote.size && !o.choice) {
-        if (localPristine() && !(await S.listBlobs()).length) choice = 'adopt';
+        if (pristine) choice = 'adopt';
         else if (S.pages.size) choice = await askHow(remote.size);
       }
-      if (!choice) { sync.dir = before; sync.state = beforeState; return false; }
+      if (!choice) return false;
+      if (choice !== 'merge' && !(choice === 'adopt' && pristine)) throw new Error('Save a backup and combine the notebooks to keep this PC’s notes.');
+      if (paused) throw new Error('An app update is in progress. Try connecting the notebook again when it finishes.');
+      // Persist the exact selection and layout together. Existing parent-folder
+      // handles remain readable through the legacy syncDir fallback on startup.
+      if (!S.memoryOnly) { await db.put('meta', { handle, direct: location.direct }, 'syncLocation'); locationSaved = true; }
+      sync.dir = handle; sync.direct = location.direct;
       if (choice === 'adopt') await S.wipeLocal();
-      if (!S.memoryOnly) await db.put('meta', handle, 'syncDir');
       sync.state = 'ready';
-      const ok = await run();
+      const ok = await performRun();
       if (choice === 'adopt') { S.settings.seedAt = 0; S.saveSettings(); ZN.go('home'); }
       return ok;
     } catch (e) {
       sync.dir = before;
       sync.state = beforeState;
-      S.emit('sync');
+      sync.direct = beforeDirect;
+      pageCache.clear(); imgCache.clear();
+      if (locationSaved) {
+        try { await db.put('meta', { handle: before, direct: beforeDirect }, 'syncLocation'); }
+        catch (_) { sync.state = 'error'; sync.lastError = 'The previous folder connection could not be restored. Reconnect it before syncing.'; }
+      }
       throw e;
     }
   }
 
-  sync.link = async function () {
-    return attach(await window.showDirectoryPicker({ id: 'znote-sync', mode: 'readwrite' }));
+  sync.link = async function (options) {
+    return attach(await window.showDirectoryPicker({ id: 'znote-sync', mode: 'readwrite' }), options);
   };
+  sync.openExisting = () => sync.link({ existing: true });
   sync.attach = attach;
   sync.run = run;
-  sync.unlink = async function () {
+  sync.unlink = () => exclusive(async () => {
+    if (paused) throw new Error('An app update is in progress. Try again when it finishes.');
+    // A tombstone prevents a stale legacy handle from reconnecting on startup.
+    if (!S.memoryOnly) await db.put('meta', { handle: null, direct: false }, 'syncLocation');
     sync.dir = null;
+    sync.direct = false;
     sync.state = 'none';
     pageCache.clear();
     imgCache.clear();
     hideBanner();
-    if (!S.memoryOnly) await db.del('meta', 'syncDir');
-    S.emit('sync');
-  };
+  });
   /* must be called from a click: the browser only asks for folder access in answer to one */
   sync.unlock = async function () {
-    if (!sync.dir) return false;
-    sync.state = await permission(true);
-    S.emit('sync');
-    if (sync.state !== 'ready') return false;
-    hideBanner();
-    return run();
+    const handle = sync.dir;
+    if (!handle || paused) return false;
+    const state = await permission(true, handle);
+    return exclusive(async () => {
+      if (handle !== sync.dir || paused) return false;
+      sync.state = state;
+      if (state !== 'ready') return false;
+      hideBanner();
+      const view = ZN.shell && ZN.shell.view();
+      if (view && view.prepareExport) await view.prepareExport();
+      return performRun();
+    });
   };
+  sync.now = async function () {
+    if (sync.state === 'locked') return sync.unlock();
+    return exclusive(async () => {
+      if (paused) return false;
+      const view = ZN.shell && ZN.shell.view();
+      if (view && view.prepareExport) await view.prepareExport();
+      return performRun();
+    });
+  };
+  sync.pause = async function () { paused++; later.cancel(); soon.cancel(); await operations; };
+  sync.resume = function () { if (paused) paused--; if (!paused && sync.dir) later(); };
+  sync.idle = () => operations;
 
   /* Start over everywhere: wipe this PC, record every old page and picture (here and in the folder) as deleted so
      the other PCs drop them too, put a new notebook in place with reseed(), and sync. Throws before anything is
      erased if the folder cannot be used right now. Call it from a click (the browser may ask for folder access). */
   sync.resetAll = async function (reseed) {
     if (!sync.dir) return false;
-    if ((await permission(true)) !== 'ready') throw new Error('Z Note needs your OK to use the sync folder before it can empty it.');
-    for (let i = 0; busy && i < 150; i++) await new Promise(r => setTimeout(r, 100));     // let a round in progress finish
-    if (busy) throw new Error('Sync is busy right now. Try again in a moment.');
-    busy = true;
-    S.emit('sync');
-    try {
+    const handle = sync.dir;
+    if ((await permission(true, handle)) !== 'ready') throw new Error('Z Note needs your OK to use the sync folder before it can empty it.');
+    return exclusive(async () => {
+      if (paused || handle !== sync.dir) throw new Error('The source folder changed or an app update is in progress. Try again.');
       await S.flush();
       const f = await folders();
       const now = Date.now();
@@ -353,11 +416,8 @@
       S.saveSettings();
       reseed();
       sync.state = 'ready';
-    } finally {
-      busy = false;
-      S.emit('sync');
-    }
-    return run();
+      return performRun();
+    });
   };
 
   sync.init = async function () {
@@ -367,7 +427,11 @@
     window.addEventListener('focus', soon);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') soon(); });
     setInterval(() => { if (sync.dir && document.visibilityState === 'visible') run(); }, 60000);
-    try { sync.dir = (await db.get('meta', 'syncDir')) || null; } catch (e) { sync.dir = null; }
+    try {
+      const location = await db.get('meta', 'syncLocation');
+      sync.dir = location !== undefined && location !== null ? location.handle || null : (await db.get('meta', 'syncDir')) || null;
+      sync.direct = !!(location && location.direct);
+    } catch (e) { sync.dir = null; sync.direct = false; }
     if (!sync.dir) return;
     sync.lastAt = S.settings.syncAt || 0;
     sync.state = await permission(false);
@@ -376,7 +440,7 @@
   };
 
   /* ---------- what the user sees ---------- */
-  sync.statusText = () => (busy ? 'syncing now'
+  sync.statusText = () => (paused ? 'paused while the app updates' : busy ? 'syncing now'
     : sync.state === 'locked' ? 'paused until you allow access'
     : sync.state === 'error' ? 'the last try did not finish (' + sync.lastError + ')'
     : sync.lastAt ? 'last synced ' + U.ago(sync.lastAt) : 'not synced yet');
@@ -386,7 +450,7 @@
     const cls = busy ? '.busy' : (sync.state === 'locked' || sync.state === 'error' ? '.warn' : '');
     return h('button.ibtn.sync-chip' + cls, {
       type: 'button', 'aria-label': 'Sync', 'data-tip': 'Source folder: ' + (ZN.sourceFolder ? ZN.sourceFolder.info().notebookPath : sync.dir.name + ' / ' + SUB) + ' — ' + sync.statusText(),
-      onclick: () => { if (sync.state === 'locked') sync.unlock(); else run(); }
+      onclick: () => sync.now()
     }, ZN.icon('sync', 17));
   };
 
@@ -412,14 +476,18 @@
         return;
       }
       if (!sync.dir) {
-        note.replaceChildren('Keep your notebook in a folder that OneDrive syncs, and every PC that opens Z Note shares the same pages. Choose the ',
-          h('b', 'same folder on each PC'), ' — your Z Note folder inside OneDrive is a good choice.');
+        note.replaceChildren('Keep the notebook in OneDrive or a shared network folder. On another PC, choose ',
+          h('b', 'Open existing notebook'), ' and select “Z Note notebook” or the folder containing it. Each browser asks for its own folder permission.');
         actions.append(h('button.btn.primary', {
           type: 'button', onclick: async () => {
             try { if (await sync.link()) ui.toast('Sync is on. Your notebook now lives in that folder too.'); } catch (e) { fail(e); }
             fill();
           }
         }, ZN.icon('folder', 15), 'Choose the sync folder'));
+        actions.append(h('button.btn', { type: 'button', onclick: async () => {
+          try { if (await sync.openExisting()) ui.toast('Existing notebook connected and synced.'); } catch (e) { fail(e); }
+          fill();
+        } }, ZN.icon('folder', 15), 'Open existing notebook…'));
         return;
       }
       note.replaceChildren('Syncing with ', h('b', sync.dir.name), ' — ' + sync.statusText() + '.',
@@ -428,17 +496,22 @@
       if (sync.state === 'locked') actions.append(h('button.btn.primary', { type: 'button', onclick: async () => { await sync.unlock(); fill(); } }, 'Allow access'));
       else actions.append(h('button.btn', {
         type: 'button', onclick: async () => {
-          const ok = await run();
+          const ok = await sync.now();
           ui.toast(ok ? 'Everything is in sync.' : 'Sync did not finish' + (sync.lastError ? ': ' + sync.lastError : '.'), { error: !ok });
           fill();
         }
       }, ZN.icon('sync', 15), 'Sync now'));
+      actions.append(h('button.btn', { type: 'button', onclick: async () => {
+        try { if (await sync.openExisting()) ui.toast('Existing notebook connected and synced.'); } catch (e) { fail(e); }
+        fill();
+      } }, ZN.icon('folder', 15), 'Open existing notebook…'));
       actions.append(h('button.btn.quiet', { type: 'button', onclick: async () => { await sync.unlink(); fill(); } }, 'Stop syncing on this PC'));
     }
     fill();
     const off = S.on('sync', () => { if (note.isConnected) fill(); else off(); });
     const offPath = S.on('sourcefolder', () => { if (note.isConnected) fill(); else offPath(); });
     return h('div.set-group', h('h3', 'Sync folder'), note, actions,
+      h('p.set-note', 'Before switching PCs, press Sync now on this PC and wait for OneDrive to finish syncing. On the other PC, let OneDrive finish downloading, then press Sync now in Z Note. A one-time folder copy will not carry later changes between PCs.'),
       h('p.set-note.muted', 'Each page is its own file. If the same page is changed on two PCs before they have synced, the newer change wins.'));
   };
 })();

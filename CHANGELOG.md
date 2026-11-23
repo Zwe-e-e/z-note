@@ -1,5 +1,15 @@
 # Z Note release history
 
+## v2.4.0 — 2026-11-23
+
+- Add **Install update automatically** when Z Note is opened with the Windows launcher. Save a recovery backup first, show its local path, verify the official release download, update the app in its existing location, and reload after installation is confirmed.
+- Keep notes, pictures, source-folder settings and browser storage during updates. Pause editing and folder sync while installing; if the result cannot be confirmed, keep the notebook protected and ask the user to reopen the launcher for recovery.
+- Keep the backup-first manual update route for direct browser copies and older launchers. Upgrading from v2.3.0 or earlier requires one manual update to install the new launcher; future versions can use the automatic button.
+- Add **Open existing notebook…** to setup, Source folder and Sync & backup. Select **Z Note notebook** itself or its parent folder to reconnect notes without creating a nested notebook folder.
+- Add **Sync now** and guidance for using the same OneDrive or shared folder on another PC. Wait for folder transfers to finish before switching PCs; a copied folder alone does not synchronize later edits.
+
+The notebook and JSON backup formats remain unchanged. Each PC still needs its own browser permission to access the notebook folder.
+
 ## v2.3.0 — 2026-11-23
 
 - Add **Check for updates** to the sidebar and an **Updates** tab in Style & data.

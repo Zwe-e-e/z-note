@@ -408,7 +408,7 @@ button.prow:hover { background: var(--paper-3); }
 .settings { display: grid; gap: 18px; padding-bottom: 6px; }
 .update-status { margin: 0; font-weight: 600; line-height: 1.5; }
 .update-details:empty { display: none; }
-.update-guide[hidden] { display: none; }
+.updates [hidden] { display: none; }
 .update-steps { padding-left: 22px; margin: 12px 0; font-size: 14px; line-height: 1.6; }
 .update-steps li + li { margin-top: 8px; }
 .update-confirm { display: flex; gap: 9px; align-items: flex-start; margin: 12px 0; font-size: 14px; line-height: 1.5; }
