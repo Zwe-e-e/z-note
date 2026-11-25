@@ -175,6 +175,65 @@
 
   ZN.tasks = { newTask, parseQuick, quickAdd, collect, dueCount, toggle, row, inboxPage, priorityOf, setPriority, movePriority, changeCollectedPriority };
 
+  // History belongs to the mounted view. Compare the complete affected arrays
+  // before restoring so undo cannot overwrite a sync or another window's edit.
+  function taskHistory(sheet, isCurrent, redraw, announcement) {
+    const past = [], future = [];
+    const clear = () => { past.length = 0; future.length = 0; };
+    const capture = page => {
+      const key = page.type === 'note' ? 'blocks' : 'tasks';
+      const array = page.content && page.content[key];
+      if (S.get(page.id) !== page || !S.isLive(page) || !Array.isArray(array)) return null;
+      return { page, key, array, json: JSON.stringify(array) };
+    };
+    function change(pages, action) {
+      if (!isCurrent()) return null;
+      const before = Array.from(new Set(pages)).map(capture);
+      if (before.some(item => !item)) { clear(); return null; }
+      action();
+      const entries = before.map(item => Object.assign(item, { after: JSON.stringify(item.page.content[item.key]) }))
+        .filter(item => item.json !== item.after);
+      if (!entries.length) return null;
+      const step = { entries };
+      past.push(step); if (past.length > 100) past.shift(); future.length = 0;
+      return step;
+    }
+    function restore(redo, expected) {
+      if (!isCurrent()) { clear(); return false; }
+      const from = redo ? future : past, to = redo ? past : future, step = from[from.length - 1];
+      if (!step || expected && expected !== step) return false;
+      if (step.entries.some(item => S.get(item.page.id) !== item.page || !S.isLive(item.page) ||
+          item.page.content[item.key] !== item.array || JSON.stringify(item.array) !== (redo ? item.json : item.after))) {
+        clear(); ui.toast('These tasks changed elsewhere. Undo history was cleared to keep those changes.'); return false;
+      }
+      // Validate every affected list before changing any of them (including moves).
+      step.entries.forEach(item => {
+        item.array.splice(0, item.array.length, ...JSON.parse(redo ? item.after : item.json));
+        S.touch(item.page.id);
+      });
+      from.pop(); to.push(step); redraw();
+      announcement.textContent = redo ? 'Task change redone.' : 'Task change undone.';
+      return true;
+    }
+    function onKey(event) {
+      if (!isCurrent() || event.defaultPrevented || event.isComposing || event.altKey || !(event.ctrlKey || event.metaKey)) return;
+      if (sheet.closest && sheet.closest('[inert]')) return;
+      const key = String(event.key).toLowerCase();
+      if (key !== 'z' && key !== 'y') return;
+      const target = document.activeElement || event.target;
+      if (target && target !== document.body && !sheet.contains(target)) return;
+      const priorityControl = target && target.classList && target.classList.contains('task-priority');
+      if (!priorityControl && target && (U.isEditable ? U.isEditable(target) : target.closest && target.closest('input, textarea, select, [contenteditable]'))) return;
+      const layer = document.getElementById && document.getElementById('layer');
+      if (layer && Array.from(layer.children).some(child => !['toasts', 'tip', 'drop-line'].some(name => child.classList.contains(name)))) return;
+      if (document.querySelector && document.querySelector('dialog[open]')) return;
+      event.preventDefault(); restore(key === 'y' || event.shiftKey);
+    }
+    if (document.addEventListener) document.addEventListener('keydown', onKey);
+    return { change, clear, undo: step => restore(false, step),
+      destroy() { clear(); if (document.removeEventListener) document.removeEventListener('keydown', onKey); } };
+  }
+
   /* ====================================================================== */
   /* a to-do list page */
   ZN.views.todo = function (el, page) {
@@ -194,13 +253,14 @@
     const doneEl = h('div.tasks.tasks-done');
     const sheet = h('div.sheet.page.todo', head.el,
       h('div.todo-add', h('span.todo-plus', ZN.icon('plus', 17)), addInput, addPriority),
-      h('div.todo-hint', 'Use 3 columns to arrange priorities, or keep the original list in 1 column. ', h('kbd', '@fri'), ' sets a date; ', h('kbd', '!'), ' adds to A · High.'),
+      h('div.todo-hint', 'Use 3 columns to arrange priorities, or keep the original list in 1 column. ', h('kbd', '@fri'), ' sets a date; ', h('kbd', '!'), ' adds to A · High. ', h('kbd', 'Ctrl Z'), ' undoes task changes; ', h('kbd', 'Ctrl Shift Z'), ' redoes them.'),
       h('div.task-layout-bar', h('span.task-layout-label', 'View'), layout.el),
       progress, openEl, announcement, doneHead, doneEl);
     el.append(h('div.page-wrap', sheet));
 
     const byId = id => tasks.find(t => t.id === id);
     const changed = () => S.touch(page.id);
+    const history = taskHistory(sheet, () => alive && S.get(page.id) === page && S.isLive(page) && page.content.tasks === tasks, render, announcement);
     const textEl = id => { const r = sheet.querySelector('.task[data-id="' + id + '"] .task-text'); return r || null; };
     const focusTask = (id, where) => { const t = textEl(id); if (t) C.set(t, where === undefined ? 'end' : where); };
 
@@ -269,6 +329,7 @@
         container: openEl, column: '.todo-column, .todo-list-column', item: '.task', handle: '.task-grip', scroller: el,
         onDrop: (item, beforeEl, column) => {
           const beforeId = beforeEl && beforeEl.dataset.id;
+          const step = history.change([page], () => {
           if (layoutMode() === 'columns') {
             if (!movePriority(tasks, item.dataset.id, column.dataset.priority, beforeId)) return;
             announcement.textContent = 'Task moved to ' + column.dataset.priority + ' · ' + PRIORITIES.find(p => p.key === column.dataset.priority).name + '.';
@@ -283,6 +344,8 @@
             tasks.splice(0, tasks.length, ...next);
             announcement.textContent = 'Task reordered. Priority unchanged.';
           }
+          });
+          if (!step) return;
           render(); changed();
         }
       });
@@ -292,7 +355,7 @@
       const q = parseQuick(addInput.value);
       if (!q.text) return;
       const t = newTask(q.text, { due: q.due, priority: q.pri ? 'A' : addPriority.value });
-      tasks.push(t);
+      if (!history.change([page], () => tasks.push(t))) return;
       addInput.value = '';
       render();
       changed();
@@ -301,8 +364,7 @@
     }
 
     function setDone(t, on) {
-      t.done = on;
-      t.doneAt = on ? Date.now() : 0;
+      if (!tasks.includes(t) || !history.change([page], () => { t.done = on; t.doneAt = on ? Date.now() : 0; })) return;
       changed();
       setTimeout(() => { if (alive) render(); }, 380);
     }
@@ -310,11 +372,12 @@
     function remove(t, quiet) {
       const i = tasks.indexOf(t);
       if (i < 0) return;
-      tasks.splice(i, 1);
+      const step = history.change([page], () => tasks.splice(i, 1));
+      if (!step) return;
       noteOpen.delete(t.id);
       render();
       changed();
-      if (!quiet) ui.toast('To-do deleted', { action: { label: 'Undo', fn: () => { tasks.splice(Math.min(i, tasks.length), 0, t); if (alive) render(); changed(); } } });
+      if (!quiet) ui.toast('To-do deleted', { action: { label: 'Undo', fn: () => history.undo(step) } });
     }
 
     function moveTask(t, dir) {
@@ -323,7 +386,7 @@
       const other = open[k + dir];
       if (k < 0 || !other) return;
       const i = tasks.indexOf(t), j = tasks.indexOf(other);
-      tasks[i] = other; tasks[j] = t;
+      if (!history.change([page], () => { tasks[i] = other; tasks[j] = t; })) return;
       const off = C.offset(textEl(t.id));
       render();
       focusTask(t.id, off);
@@ -332,7 +395,7 @@
 
     function changePriority(t, priority) {
       if (priorityOf(t) === priority) return;
-      if (!setPriority(t, priority)) return;
+      if (!tasks.includes(t) || !history.change([page], () => setPriority(t, priority))) return;
       render(); changed();
       const select = sheet.querySelector('.task[data-id="' + t.id + '"] .task-priority');
       if (select) select.focus();
@@ -344,15 +407,22 @@
       ui.menu(anchor, [
         { label: t.note ? 'Edit the note' : 'Add a note', icon: 'note', onClick: () => { noteOpen.add(t.id); render(); const n = sheet.querySelector('.task[data-id="' + t.id + '"] .task-note'); if (n) C.set(n, 'end'); } },
         { label: 'Priority', icon: 'flag', items: PRIORITIES.map(p => ({ label: p.key + ' · ' + p.name, onClick: () => changePriority(t, p.key) })) },
-        { label: 'Duplicate', icon: 'copy', onClick: () => { const c = newTask(t.text, { due: t.due, priority: priorityOf(t), note: t.note }); tasks.splice(tasks.indexOf(t) + 1, 0, c); render(); changed(); focusTask(c.id); } },
+        { label: 'Duplicate', icon: 'copy', onClick: () => {
+          if (!tasks.includes(t)) return;
+          const c = newTask(t.text, { due: t.due, priority: priorityOf(t), note: t.note });
+          if (!history.change([page], () => tasks.splice(tasks.indexOf(t) + 1, 0, c))) return;
+          render(); changed(); focusTask(c.id);
+        } },
         lists.length ? {
           label: 'Move to another list', icon: 'move',
           items: lists.map(p => ({
             label: ZN.pageTitle(p), icon: 'todo',
             onClick: () => {
-              tasks.splice(tasks.indexOf(t), 1);
-              if (!p.content || !Array.isArray(p.content.tasks)) p.content = { tasks: [] };
-              p.content.tasks.push(t);
+              if (!tasks.includes(t)) return;
+              if (!history.change([page, p], () => {
+                tasks.splice(tasks.indexOf(t), 1);
+                p.content.tasks.push(t);
+              })) return;
               S.touch(p.id);
               render(); changed();
               ui.toast('Moved to “' + ZN.pageTitle(p) + '”', { action: { label: 'Open', fn: () => ZN.openPage(p.id) } });
@@ -372,10 +442,12 @@
         e.stopPropagation();
         const gone = tasks.filter(t => t.done);
         if (!gone.length) return;
-        const snapshot = tasks.slice();
-        for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].done) tasks.splice(i, 1);
+        const step = history.change([page], () => {
+          for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].done) tasks.splice(i, 1);
+        });
+        if (!step) return;
         render(); changed();
-        ui.toast(gone.length + (gone.length === 1 ? ' finished to-do cleared' : ' finished to-dos cleared'), { action: { label: 'Undo', fn: () => { tasks.length = 0; snapshot.forEach(t => tasks.push(t)); if (alive) render(); changed(); } } });
+        ui.toast(gone.length + (gone.length === 1 ? ' finished to-do cleared' : ' finished to-dos cleared'), { action: { label: 'Undo', fn: () => history.undo(step) } });
         return;
       }
       const r = act.closest('.task');
@@ -386,7 +458,10 @@
         act.classList.toggle('on', on);
         r.classList.toggle('done', on);
         setDone(t, on);
-      } else if (a === 'due') ui.datePicker(act, t.due, v => { t.due = v; render(); changed(); });
+      } else if (a === 'due') ui.datePicker(act, t.due, v => {
+        if (!tasks.includes(t) || !history.change([page], () => { t.due = v; })) return;
+        render(); changed();
+      });
       else if (a === 'more') moreMenu(act, t);
     });
     sheet.addEventListener('change', e => {
@@ -406,10 +481,12 @@
       const t = r ? byId(r.dataset.id) : null;
       if (!t) return;
       if (e.target.classList.contains('task-text')) {
+        history.clear(); // Native text undo owns the current editing session.
         if (e.target.textContent.trim() === '') e.target.textContent = '';
         t.text = e.target.textContent.replace(/\s*\n\s*/g, ' ');
         changed();
       } else if (e.target.classList.contains('task-note')) {
+        history.clear();
         if (e.target.textContent.trim() === '') e.target.textContent = '';
         t.note = e.target.textContent;
         changed();
@@ -446,7 +523,8 @@
         if (mod) { const row2 = te.closest('.task'); const on = !t.done; row2.classList.toggle('done', on); row2.querySelector('.chk').classList.toggle('on', on); setDone(t, on); return; }
         if (!t.text) return;
         const nt = newTask('', { priority: priorityOf(t) });
-        tasks.splice(tasks.indexOf(t) + 1, 0, nt);
+        if (!history.change([page], () => tasks.splice(tasks.indexOf(t) + 1, 0, nt))) return;
+        changed();
         render();
         focusTask(nt.id, 0);
         return;
@@ -491,6 +569,7 @@
       focusTitle: head.focusTitle,
       unmount() {
         alive = false;
+        history.destroy();
         offSort();
         offStyle();
         // drop to-dos that were left empty
@@ -517,22 +596,25 @@
       h('p.sub', 'Every to-do from your lists and the tick-boxes inside your notes, gathered in one place.'),
       h('div.todo-add', h('span.todo-plus', ZN.icon('plus', 17)), input),
       modeControl.el,
-      h('p.todo-hint', 'Choose a view, then adjust priorities when you are ready. Tasks stay in their original lists and notes.'),
+      h('p.todo-hint', 'Choose a view, then adjust priorities when you are ready. Tasks stay in their original lists and notes. ', h('kbd', 'Ctrl Z'), ' undoes task changes; ', h('kbd', 'Ctrl Shift Z'), ' redoes them.'),
       tabsEl, body, announcement);
     el.append(h('div.page-wrap', sheet));
 
+    const history = taskHistory(sheet, () => alive, render, announcement);
     input.addEventListener('keydown', e => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
-      const list = quickAdd(input.value);
-      if (!list) return;
+      if (!parseQuick(input.value).text) return;
+      const list = inboxPage();
+      if (!history.change([list], () => quickAdd(input.value, list))) return;
       input.value = '';
       ui.toast('Added to “' + ZN.pageTitle(list) + '”', { action: { label: 'Open', fn: () => ZN.openPage(list.id) } });
     });
 
     const currentItem = key => collect().find(item => item.key === key);
     function priorityChanged(key, priority) {
-      if (!alive || !changeCollectedPriority(key, priority)) return;
+      const item = currentItem(key);
+      if (!alive || !item || !history.change([item.page], () => changeCollectedPriority(key, priority))) return;
       render();
       const select = Array.from(body.querySelectorAll('.task-priority')).find(node => node.dataset.key === key);
       if (select) select.focus();
@@ -546,7 +628,7 @@
           // A sync may have replaced this record since the row was rendered.
           const current = currentItem(item.key);
           if (!alive || !current) return;
-          toggle(current);
+          if (!history.change([current.page], () => toggle(current))) return;
           render();
         }
       });
@@ -636,6 +718,6 @@
     const refill = U.debounce(render, 150);
     render();
     const offs = [S.on('content', refill), S.on('tree', refill), S.on('settings', key => { if (key === 'taskLayout') refill(); })];
-    return { unmount() { alive = false; refill.cancel(); if (offDrag) offDrag(); offs.forEach(f => f()); } };
+    return { unmount() { alive = false; history.destroy(); refill.cancel(); if (offDrag) offDrag(); offs.forEach(f => f()); } };
   };
 })();

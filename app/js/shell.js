@@ -3,8 +3,8 @@
   'use strict';
   const ZN = window.ZN, U = ZN.util, h = U.h, S = ZN.store, ui = ZN.ui;
 
-  const TYPE_ICON = { notebook: 'book', note: 'note', todo: 'todo', board: 'board' };
-  const TYPE_NAME = { notebook: 'Notebook', note: 'Note', todo: 'To-do list', board: 'Board' };
+  const TYPE_ICON = { notebook: 'book', note: 'note', todo: 'todo', board: 'board', budget: 'budget' };
+  const TYPE_NAME = { notebook: 'Notebook', note: 'Note', todo: 'To-do list', board: 'Board', budget: 'Budget & expenses' };
   const NB_COLORS = [
     { id: 'blue', css: 'var(--blue)', label: 'Blue' }, { id: 'red', css: 'var(--red)', label: 'Red' },
     { id: 'green', css: 'var(--green)', label: 'Green' }, { id: 'amber', css: 'var(--amber)', label: 'Amber' },
@@ -286,7 +286,8 @@
   const NEW_ITEMS = parentId => [
     { label: 'Note', sub: 'Write ideas with headings, lists and pictures', icon: 'note', hint: parentId ? '' : 'Alt N', onClick: () => newPage('note', parentId) },
     { label: 'To-do list', sub: 'Tasks with due dates', icon: 'todo', hint: parentId ? '' : 'Alt T', onClick: () => newPage('todo', parentId) },
-    { label: 'Board', sub: 'Sticky notes, shapes and arrows on a big canvas', icon: 'board', hint: parentId ? '' : 'Alt B', onClick: () => newPage('board', parentId) }
+    { label: 'Board', sub: 'Sticky notes, shapes and arrows on a big canvas', icon: 'board', hint: parentId ? '' : 'Alt B', onClick: () => newPage('board', parentId) },
+    { label: 'Budget & expenses', sub: 'Monthly budgets, spending summaries and receipts', icon: 'budget', onClick: () => newPage('budget', parentId) }
   ];
   function newMenu(anchor) {
     ui.menu(anchor, NEW_ITEMS(null).concat([
@@ -454,6 +455,7 @@
         h('button.btn.primary', { type: 'button', onclick: () => newPage('note', nb.id) }, ZN.icon('note', 15), 'New note'),
         h('button.btn', { type: 'button', onclick: () => newPage('todo', nb.id) }, ZN.icon('todo', 15), 'New to-do list'),
         h('button.btn', { type: 'button', onclick: () => newPage('board', nb.id) }, ZN.icon('board', 15), 'New board'),
+        h('button.btn', { type: 'button', onclick: () => newPage('budget', nb.id) }, ZN.icon('budget', 15), 'New budget & expenses'),
         h('button.btn.quiet', { type: 'button', onclick: () => ZN.templates && ZN.templates.pick(nb.id) }, ZN.icon('layout', 15), 'From a template')),
       list)));
     fill();
@@ -508,7 +510,11 @@
     S.on('tree', () => { queueSidebar(); queueTopbar(); });
     S.on('content', U.debounce(renderSidebar, 400));
     S.on('save', showSave);
-    S.on('external', ids => { if (route.name === 'p' && ids.indexOf(route.arg) >= 0) renderRoute(); });
+    S.on('external', ids => {
+      if (route.name !== 'p' || ids.indexOf(route.arg) < 0) return;
+      if (current && current.handleExternalChange && current.handleExternalChange()) return;
+      renderRoute();
+    });
     S.on('sync', queueTopbar);
     S.on('sourcefolder', queueTopbar);
     S.on('otherwindow', () => {

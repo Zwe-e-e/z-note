@@ -16,6 +16,7 @@
       text = ZN.board && ZN.board.textOf ? ZN.board.textOf(p)
         : (content.items || []).map(i => (i.text ? U.text(i.text) : '') + (i.title ? ' ' + i.title : '')).filter(Boolean).join('\n');
     }
+    else if (p.type === 'budget') text = ZN.budget ? ZN.budget.textOf(p) : '';
     cache.set(p.id, { updated: p.updated, text });
     return text;
   }
@@ -26,6 +27,7 @@
       { label: 'New note', icon: 'note', hint: 'Alt N', run: () => sh.newPage('note') },
       { label: 'New to-do list', icon: 'todo', hint: 'Alt T', run: () => sh.newPage('todo') },
       { label: 'New board', icon: 'board', hint: 'Alt B', run: () => sh.newPage('board') },
+      { label: 'New budget & expenses', icon: 'budget', run: () => sh.newPage('budget') },
       { label: 'New notebook', icon: 'book', run: () => sh.newNotebook() },
       { label: 'Start from a template', icon: 'layout', run: () => ZN.templates.pick() },
       { label: 'Snip the screen', icon: 'snip', hint: 'Alt S', run: () => ZN.snip && ZN.snip.start() },

@@ -1,7 +1,7 @@
 /* Z Note · sync folder — keeps the notebook in a folder (for example inside OneDrive) so several PCs share it.
    Layout inside the chosen folder:
      Z Note notebook/pages/<id>.json      one file per page
-     Z Note notebook/images/<id>.<ext>    pictures, each with <id>.json describing it
+     Z Note notebook/images/<id>.<ext>    pictures and receipts, each with <id>.json describing it
      Z Note notebook/deleted/*.del        records of pages (p_) and pictures (i_) deleted for good
    Rule: for each page or picture, the copy that was changed last wins. */
 (function () {
@@ -11,9 +11,9 @@
   const SUB = 'Z Note notebook';
   const KEEP_DELETED = 180 * 864e5;
   const modOf = x => +x.mod || +x.updated || +x.created || 0;
-  const extOf = mime => (/jpe?g/.test(mime) ? 'jpg' : /gif/.test(mime) ? 'gif' : /webp/.test(mime) ? 'webp' : 'png');
+  const extOf = mime => (mime === 'application/pdf' ? 'pdf' : /jpe?g/.test(mime) ? 'jpg' : /gif/.test(mime) ? 'gif' : /webp/.test(mime) ? 'webp' : 'png');
   const SAFE_ID = /^[a-z0-9]{4,40}$/i;
-  const SAFE_IMG = /^[a-z0-9]{4,40}\.(png|jpg|gif|webp)$/i;
+  const SAFE_IMG = /^[a-z0-9]{4,40}\.(png|jpg|gif|webp|pdf)$/i;
 
   let busy = false, banner = null, paused = 0, scheduledRun = null;
   let operations = Promise.resolve();
@@ -149,6 +149,10 @@
 
   function pictureIds(page) {
     const content = page.content || {};
+    if (page.type === 'budget') {
+      if (!ZN.budget || !ZN.budget.attachmentIds) throw new Error('Budget receipts could not be loaded. Reopen the current Z Note version and try again.');
+      return ZN.budget.attachmentIds(page);
+    }
     const items = page.type === 'note' ? content.blocks || [] : page.type === 'board' ? content.items || [] : [];
     return items.filter(item => item && (item.t === 'image' || item.t === 'img' || item.kind === 'image')).map(item => String(item.src || ''));
   }
@@ -218,12 +222,20 @@
           const knownSource = sameVersion && Number.isFinite(local.sourceFileModified) && Number.isFinite(local.sourceFileSize);
           incoming = incoming || !!(knownSource && (local.sourceFileModified !== file.lastModified || local.sourceFileSize !== file.size));
           if (!incoming && !options.validateAll) continue;
-          const blob = new Blob([await file.arrayBuffer()], { type: r.meta.mime || 'image/png' });
+          let blob = new Blob([await file.arrayBuffer()], { type: r.meta.mime || 'image/png' });
           if (!blob.size || (Number.isFinite(r.meta.size) && r.meta.size !== blob.size)) throw new Error('Incomplete picture');
-          rec = { id, blob, mime: r.meta.mime || blob.type, size: blob.size, w: +r.meta.w || 0, h: +r.meta.h || 0,
-            name: String(r.meta.name || ''), kind: r.meta.kind === 'snip' ? 'snip' : 'image', created: +r.meta.created || now, mod: r.mod,
+          const attachment = r.meta.kind === 'attachment' || /\.pdf$/i.test(r.meta.file) || blob.type === 'application/pdf';
+          let mime = r.meta.mime || blob.type;
+          if (attachment) {
+            const info = await S.attachmentInfo(blob);
+            if (mime !== info.mime || extOf(info.mime) !== r.meta.file.split('.').pop().toLowerCase()) throw new Error('Invalid receipt information');
+            mime = info.mime;
+            if (blob.type !== mime) blob = new Blob([blob], { type: mime });
+          }
+          rec = { id, blob, mime, size: blob.size, w: +r.meta.w || 0, h: +r.meta.h || 0,
+            name: String(r.meta.name || ''), kind: attachment ? 'attachment' : r.meta.kind === 'snip' ? 'snip' : 'image', created: +r.meta.created || now, mod: r.mod,
             sourceFileModified: file.lastModified, sourceFileSize: file.size };
-        } catch (e) { throw new Error('A picture has not finished downloading or cannot be read. Wait for the folder service to finish, then try again.'); }
+        } catch (e) { throw new Error('A picture or receipt has not finished downloading, is invalid or cannot be read. Wait for the folder service to finish, then try again.'); }
         if (incoming) { images.push(rec); have.set(id, rec); }
       }
     }
@@ -233,7 +245,19 @@
     }
     for (const pg of checkedPages) for (const id of pictureIds(pg)) {
       // Explicitly deleted pictures are allowed to retain their old placeholder.
-      if (!rImgs.has(id) && !tomb['i:' + id]) throw new Error('This notebook refers to a picture that is missing from its images folder. Finish syncing the original PC and folder service, then try again.');
+      if (!rImgs.has(id) && !tomb['i:' + id]) throw new Error('This notebook refers to a ' + (pg.type === 'budget' ? 'receipt' : 'picture') + ' that is missing from its images folder. Finish syncing the original PC and folder service, then try again.');
+      if (pg.type === 'budget' && have.has(id) && have.get(id).kind !== 'attachment') throw new Error('A budget receipt has invalid information. Sync the original PC and try again.');
+    }
+    // A receipt can be shared by duplicate budgets, including pages in trash.
+    // Do not apply another PC's deletion if the resulting notebook still needs
+    // that file; keep the current notebook intact so the conflict can be fixed.
+    const remainingPages = new Map(replace ? [] : S.pages);
+    deletedPages.forEach(id => remainingPages.delete(id));
+    pages.forEach(page => remainingPages.set(page.id, page));
+    for (const page of remainingPages.values()) if (page.type === 'budget') {
+      for (const id of pictureIds(page)) if (!have.has(id) || have.get(id).kind !== 'attachment') {
+        throw new Error('A budget receipt is missing or marked deleted while an expense still uses it. Restore the receipt on the original PC, or remove the missing attachment from that expense, then sync again.');
+      }
     }
     return { f, gone, tomb, dead, remote, rImgs, pages, deletedPages, images, deletedImages, replace, imageRevision, expectedPages, expectedTomb,
       removeDeleted, removePages, removeImages };
@@ -544,8 +568,7 @@
         } }, ZN.icon('folder', 15), 'Open existing notebook…'));
         return;
       }
-      note.replaceChildren('Syncing with ', h('b', sync.dir.name), ' — ' + sync.statusText() + '.',
-        h('div.source-path', ZN.sourceFolder ? ZN.sourceFolder.info().notebookPath : sync.dir.name + ' / ' + SUB));
+      note.replaceChildren('Syncing with ', h('b', sync.dir.name), ' — ' + sync.statusText() + '.');
       if (ZN.sourceFolder) actions.append(h('button.btn', { type: 'button', onclick: () => ZN.sourceFolder.open() }, ZN.icon('folder', 15), 'Source folder details'));
       if (sync.state === 'locked') actions.append(h('button.btn.primary', { type: 'button', onclick: async () => { await sync.unlock(); fill(); } }, 'Allow access'));
       else actions.append(h('button.btn', {
@@ -564,7 +587,7 @@
     fill();
     const off = S.on('sync', () => { if (note.isConnected) fill(); else off(); });
     const offPath = S.on('sourcefolder', () => { if (note.isConnected) fill(); else offPath(); });
-    return h('div.set-group', h('h3', 'Sync folder'), note, actions,
+    return h('div.set-group', h('h3', 'Sync folder'), ZN.sourceFolder ? ZN.sourceFolder.pathPanel() : null, note, actions,
       h('p.set-note', 'Before switching PCs, press Sync now on this PC and wait for OneDrive to finish syncing. On the other PC, let OneDrive finish downloading, then press Sync now in Z Note. A one-time folder copy will not carry later changes between PCs.'),
       h('p.set-note.muted', 'Each page is its own file. If the same page is changed on two PCs before they have synced, the newer change wins.'));
   };

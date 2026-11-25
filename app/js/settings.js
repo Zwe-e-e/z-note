@@ -68,11 +68,22 @@
   async function exportAll() {
     const view = ZN.shell && ZN.shell.view();
     if (view && view.prepareExport) await view.prepareExport();
+    if (S.flushDataWork) await S.flushDataWork();
     await S.flush();
     const settings = JSON.parse(JSON.stringify(S.settings));
     const pages = JSON.parse(JSON.stringify(Array.from(S.pages.values())));
     // A failed image read must not turn into an apparently complete backup.
     const blobs = S.memoryOnly ? await S.listBlobs() : await db.all('blobs');
+    const byId = new Map(blobs.map(b => [b.id, b]));
+    for (const page of pages) if (page.type === 'budget') {
+      if (!ZN.budget || !ZN.budget.attachmentIds) throw new Error('Budget receipts could not be loaded. Reopen the current Z Note version and try again.');
+      for (const id of ZN.budget.attachmentIds(page)) {
+        const rec = byId.get(id);
+        if (!rec || rec.kind !== 'attachment') throw new Error('A budget receipt is missing. Sync its source folder or remove the missing attachment before backing up.');
+        const info = await S.attachmentInfo(rec.blob);
+        if (rec.mime !== info.mime) throw new Error('A budget receipt has an invalid file type. The backup was not created.');
+      }
+    }
     const images = [];
     for (const b of blobs) {
       images.push({ id: b.id, mime: b.mime, name: b.name, kind: b.kind, w: b.w, h: b.h, created: b.created, data: await U.blobToDataURL(b.blob) });
@@ -90,7 +101,8 @@
   }
 
   function normalizePage(p) {
-    if (!p || typeof p !== 'object' || !p.id || ['notebook', 'note', 'todo', 'board'].indexOf(p.type) < 0) return null;
+    if (!p || typeof p !== 'object' || !p.id || ['notebook', 'note', 'todo', 'board', 'budget'].indexOf(p.type) < 0) return null;
+    if (p.type === 'budget' && (!ZN.budget || !ZN.budget.normalizeContent)) throw new Error('Budget pages could not be loaded. Reopen the current Z Note version and try again.');
     const out = {
       id: String(p.id), type: p.type, title: String(p.title || ''), icon: String(p.icon || ''), color: String(p.color || ''),
       parentId: p.parentId ? String(p.parentId) : null, order: +p.order || 0,
@@ -107,6 +119,8 @@
     } else if (p.type === 'board') {
       c.items = (Array.isArray(c.items) ? c.items : []).filter(i => i && i.id && i.kind)
         .map(i => (typeof i.text === 'string' ? Object.assign({}, i, { text: U.cleanHTML(i.text) }) : i));
+    } else if (p.type === 'budget') {
+      out.content = ZN.budget.normalizeContent(c);
     }
     return out;
   }
@@ -114,36 +128,56 @@
   /* mode: 'merge' keeps what you have and adds/updates from the backup; 'replace' wipes first */
   async function importData(data, mode) {
     if (!data || data.app !== 'znote' || !Array.isArray(data.pages)) throw new Error('That file is not a Z Note backup.');
-    const pages = data.pages.map(normalizePage).filter(Boolean);
+    const pages = data.pages.map(normalizePage);
+    if (pages.some(page => !page)) throw new Error('This backup contains an invalid or unsupported page. Update Z Note before restoring it. Nothing has been restored.');
     const images = Array.isArray(data.images) ? data.images : [];
-    await S.flush();
-    if (mode === 'replace') { await db.clear('pages'); await db.clear('blobs'); }
+    if (S.checkpoint && !S.memoryOnly) await S.checkpoint();
+    else { if (S.flushDataWork) await S.flushDataWork(); await S.flush(); }
+    if (S.hasUnsaved && S.hasUnsaved()) throw new Error('Your current notes could not be saved. Keep this window open and try restoring again later.');
     const puts = pages.filter(p => {
       if (mode === 'replace') return true;
       const e = S.pages.get(p.id);
       return !e || p.updated > (e.updated || 0);
     });
-    await db.batch('pages', puts, []);
-    const have = new Set(mode === 'replace' ? [] : (await S.listBlobs()).map(b => b.id));
-    let added = 0;
+    const have = new Map((mode === 'replace' ? [] : (S.memoryOnly ? await S.listBlobs() : await db.all('blobs'))).map(b => [b.id, b]));
+    const records = [];
     for (const im of images) {
       if (!im || !im.id || have.has(String(im.id))) continue;
       let blob = null;
       try { blob = im.blob || (im.data ? U.dataURLToBlob(im.data) : null); } catch (e) { blob = null; }
-      if (!blob || !/^image\//.test(blob.type || im.mime || '')) continue;
-      await db.put('blobs', {
-        id: String(im.id), blob, mime: im.mime || blob.type, size: blob.size, w: +im.w || 0, h: +im.h || 0,
-        name: String(im.name || ''), kind: im.kind === 'snip' ? 'snip' : 'image', created: +im.created || Date.now()
-      });
-      added++;
+      const attachment = im.kind === 'attachment' || im.mime === 'application/pdf' || (blob && blob.type === 'application/pdf');
+      let mime = im.mime || (blob && blob.type);
+      if (attachment) {
+        const info = await S.attachmentInfo(blob);
+        if (mime && mime !== info.mime) throw new Error('A receipt in this backup has an invalid file type. Nothing has been restored.');
+        mime = info.mime;
+        if (blob.type !== mime) blob = new Blob([blob], { type: mime });
+      } else if (!blob || !/^image\//.test(blob.type || im.mime || '')) continue;
+      const record = {
+        id: String(im.id), blob, mime, size: blob.size, w: +im.w || 0, h: +im.h || 0,
+        name: String(im.name || ''), kind: attachment ? 'attachment' : im.kind === 'snip' ? 'snip' : 'image',
+        created: +im.created || Date.now(), mod: +im.mod || +im.created || Date.now()
+      };
+      records.push(record);
+      have.set(String(im.id), record);
     }
+    // Validate receipts before the transaction: an incomplete backup must never
+    // replace the current notebook or leave an expense with a silently lost PDF.
+    for (const page of puts) if (page.type === 'budget') {
+      for (const id of ZN.budget.attachmentIds(page)) {
+        if (!have.has(id) || have.get(id).kind !== 'attachment') throw new Error('A budget receipt is missing from this backup. Nothing has been restored.');
+        const record = have.get(id), info = await S.attachmentInfo(record.blob);
+        if (record.mime !== info.mime) throw new Error('A budget receipt has an invalid file type. Nothing has been restored.');
+      }
+    }
+    let st = null;
     if (mode === 'replace' && data.settings && typeof data.settings === 'object') {
       const d = S.defaults();
-      const st = Object.assign(d, data.settings, { style: Object.assign(d.style, data.settings.style || {}), seeded: true });
-      await db.put('meta', st, 'settings');
-      try { localStorage.setItem('zn.style', JSON.stringify(st.style)); } catch (e) {}
+      st = Object.assign(d, data.settings, { style: Object.assign(d.style, data.settings.style || {}), seeded: true });
     }
-    return { pages: puts.length, images: added };
+    await db.syncBatch({ pages: puts, images: records, replace: mode === 'replace', settings: st });
+    if (st) try { localStorage.setItem('zn.style', JSON.stringify(st.style)); } catch (e) {}
+    return { pages: puts.length, images: records.length };
   }
 
   function askImport(data) {
@@ -154,16 +188,42 @@
     let m = null;
     const go = async mode => {
       m.close();
+      const frozen = Array.from(document.querySelectorAll('#app, .modal')).map(el => ({ el, inert: el.inert }));
+      frozen.forEach(item => { item.el.inert = true; });
+      const blockEditing = e => { if (e.type !== 'keydown' && e.type !== 'hashchange') e.preventDefault(); e.stopImmediatePropagation(); };
+      const editEvents = ['keydown', 'cut', 'paste', 'drop', 'hashchange'];
+      editEvents.forEach(type => window.addEventListener(type, blockEditing, true));
+      const status = h('p.modal-text', 'Reading the backup and saving its pages and attachments…');
+      const reloadButton = h('button.btn.primary', { type: 'button', hidden: true, onclick: () => location.reload() }, 'Reload Z Note');
+      const progress = ui.modal({ title: 'Restoring your notebook', dismissable: false, width: 500, body: [status, reloadButton] });
+      let paused = false, restored = false;
       try {
+        if (S.otherWindowsOpen && await S.otherWindowsOpen()) throw new Error('Close other Z Note windows before restoring this backup.');
+        if (ZN.sync && ZN.sync.pause) { await ZN.sync.pause(); paused = true; }
+        const view = ZN.shell && ZN.shell.view();
+        if (view && view.prepareExport) await view.prepareExport();
         const r = await importData(data, mode);
-        ui.toast('Restored ' + r.pages + ' pages and ' + r.images + ' images. Reloading…');
-        setTimeout(() => location.reload(), 900);
-      } catch (e) { ui.toast('Restore failed: ' + (e.message || e), { error: true, ms: 8000 }); }
+        restored = true;
+        status.textContent = 'Restored ' + r.pages + ' pages and ' + r.images + ' pictures or attachments. Reload Z Note to open them.';
+        reloadButton.hidden = false;
+        // Keep the old in-memory notebook inert and sync paused until it has
+        // been replaced by the freshly restored database on reload.
+        location.reload();
+      } catch (e) {
+        if (restored) status.textContent = 'The backup is restored. Reload Z Note, or close and reopen this window, to open it.';
+        else { progress.close(); ui.toast('Restore failed: ' + (e.message || e), { error: true, ms: 8000 }); }
+      } finally {
+        if (!restored) {
+          editEvents.forEach(type => window.removeEventListener(type, blockEditing, true));
+          frozen.forEach(item => { item.el.inert = item.inert; });
+          if (paused && ZN.sync.resume) ZN.sync.resume();
+        }
+      }
     };
     m = ui.modal({
       title: 'Restore this backup?', width: 500,
       body: [
-        h('p.modal-text', 'This backup holds ' + n + ' pages and ' + im + ' images, saved on ' + when + '.'),
+        h('p.modal-text', 'This backup holds ' + n + ' pages and ' + im + ' pictures or attachments, saved on ' + when + '.'),
         h('p.modal-text', h('b', 'Add to my notebook'), ' keeps everything you have now and brings in whatever is missing or newer. ',
           h('b', 'Replace my notebook'), ' erases what is here first.')
       ],
@@ -195,9 +255,9 @@
       const blobs = await S.listBlobs();
       let used = '';
       try { const est = await navigator.storage.estimate(); if (est && est.usage) used = ' · about ' + U.bytes(est.usage) + ' on disk'; } catch (e) {}
-      if (version === countVersion) stats.textContent = S.live().filter(p => p.type !== 'notebook').length + ' pages · ' + blobs.length + ' pictures' + used;
+      if (version === countVersion) stats.textContent = S.live().filter(p => p.type !== 'notebook').length + ' pages · ' + blobs.length + ' pictures or attachments' + used;
     }
-    const recount = () => count().catch(() => { stats.textContent = 'Could not count saved pictures. Try opening Sync & backup again.'; });
+    const recount = () => count().catch(() => { stats.textContent = 'Could not count saved files. Try opening Sync & backup again.'; });
     recount();
     for (const event of ['tree', 'blobs']) {
       const off = S.on(event, () => { if (stats.isConnected) recount(); else off(); });
@@ -207,12 +267,12 @@
       stats,
       ZN.sync ? ZN.sync.pane() : null,
       h('div.set-group', h('h3', 'Backup file'),
-        h('p.set-note', 'One file with every page and picture. Keep it somewhere safe, or use it to move your notebook by hand.'),
+        h('p.set-note', 'One file with every page, picture and receipt attachment. Keep it somewhere safe, or use it to move your notebook by hand.'),
         h('div.set-actions',
           h('button.btn', { type: 'button', onclick: () => download().catch(e => ui.toast('Backup failed: ' + (e.message || e), { error: true })) }, ZN.icon('download', 15), 'Download a backup'),
           h('button.btn', { type: 'button', onclick: pickBackupFile }, ZN.icon('upload', 15), 'Restore from a file…'))),
       h('div.set-group', h('h3', 'Start over'),
-        h('p.set-note', 'Erase every page and picture on this PC and begin again with the starter notebooks — Ideas, Work, Study & reference and Personal — plus the example brainstorm board. Your style choices are kept.'),
+        h('p.set-note', 'Erase every page, picture and receipt attachment on this PC and begin again with the starter notebooks — Ideas, Work, Study & reference and Personal — plus the example brainstorm board. Your style choices are kept.'),
         h('div.set-actions',
           h('button.btn.danger', { type: 'button', onclick: () => startFresh() }, ZN.icon('trash', 15), 'Start a fresh notebook…'))));
   }
@@ -241,7 +301,7 @@
       title: 'Start a fresh notebook?', width: 520,
       body: [
         h('p.modal-text', 'This erases everything in Z Note on this PC — ' + pages + (pages === 1 ? ' page' : ' pages') + ' and ' +
-          pics + (pics === 1 ? ' picture' : ' pictures') + ', including what is in the trash. It cannot be undone.'),
+          pics + (pics === 1 ? ' picture or attachment' : ' pictures or attachments') + ', including what is in the trash. It cannot be undone.'),
         h('p.modal-text', 'You then begin again with the starter notebooks — Ideas, Work, Study & reference and Personal — and the example brainstorm board, just like the first time you opened Z Note.'),
         synced ? h('p.modal-text', 'The sync folder ', h('b', synced), ' is emptied as well and then receives the fresh notebook, so ',
           h('b', 'your other PCs lose the old pages too'), ' the next time they sync. To reset only this PC, press Cancel and choose “Stop syncing on this PC” first.') : null
@@ -266,6 +326,8 @@
         k('Block menu', '/'), k('Heading', '#'), k('Bullet', '-'), k('To-do', '[]'), k('Numbered list', '1.'), k('Quote', '>'),
         k('Bold · italic · underline', 'Ctrl B/I/U'), k('Highlight', 'Ctrl Shift H'), k('Link (with text selected)', 'Ctrl K'),
         k('Indent · outdent', 'Tab Shift+Tab'), k('Move a line up or down', 'Alt ↑/↓'), k('Undo · redo', 'Ctrl Z/Y')]),
+      group('Budget pages and tasks', [
+        k('Undo a saved change', 'Ctrl Z'), k('Redo', 'Ctrl Y'), k('Redo (alternative)', 'Ctrl Shift Z')]),
       group('On a board', [
         k('Select · hand', 'V H'), k('Sticky · text', 'N T'), k('Box · circle · diamond', 'R O D'), k('Arrow · pen', 'L P'),
         k('Frame · eraser', 'F E'), k('Move around', 'Space drag'), k('Zoom', 'Ctrl +/-'), k('Fit everything', 'Shift 1'),

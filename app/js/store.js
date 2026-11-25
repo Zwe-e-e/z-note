@@ -42,6 +42,7 @@
     if (type === 'note') return { blocks: [{ id: U.uid(), t: 'p', html: '' }] };
     if (type === 'todo') return { tasks: [] };
     if (type === 'board') return { items: [], view: { x: 0, y: 0, k: 1 } };
+    if (type === 'budget') return { currency: 'SGD', budgets: {}, expenses: [] };
     return {};
   }
 
@@ -176,11 +177,37 @@
   /* delete a page and everything inside it, for good */
   function purge(id) {
     const now = Date.now();
-    [id].concat(descendants(id)).forEach(i => { pages.delete(i); dirty.add(i); S.settings.tomb['p:' + i] = now; });
+    const receiptCandidates = new Set();
+    const purgedIds = [id].concat(descendants(id));
+    purgedIds.forEach(i => {
+      const page = pages.get(i);
+      if (page && page.type === 'budget') blobReferences(page).forEach(blobId => receiptCandidates.add(blobId));
+      pages.delete(i); dirty.add(i); S.settings.tomb['p:' + i] = now;
+    });
     saveSettings();
     kidIndex = null;
     markDirty(id);
     emit('tree');
+    // Expense Undo and duplicate pages may still reference the same receipt.
+    // Only permanently purged pages nominate candidates, never a global sweep.
+    const cleanup = trackDataWork(async () => {
+      if (!receiptCandidates.size) return;
+      // Keep files if deleting their pages could not be saved. Otherwise a
+      // reload could bring the persisted page back with its receipts missing.
+      await flush();
+      while (pendingPageWrites.size) await Promise.all(Array.from(pendingPageWrites));
+      if (purgedIds.some(pageId => dirty.has(pageId))) throw new Error('The deleted page could not be saved. Its receipts have been kept.');
+      for (const blobId of receiptCandidates) await delBlob(blobId, { unreferencedAttachment: true });
+    });
+    cleanup.catch(e => { console.error('[Z Note] receipt cleanup failed', e); emit('save', 'error', e); });
+    return cleanup;
+  }
+
+  function blobReferences(page) {
+    const c = page.content || {};
+    if (page.type === 'budget') return (Array.isArray(c.expenses) ? c.expenses : []).flatMap(e => e && Array.isArray(e.attachments) ? e.attachments.filter(id => typeof id === 'string') : []);
+    const items = page.type === 'note' ? c.blocks : page.type === 'board' ? c.items : [];
+    return (Array.isArray(items) ? items : []).filter(item => item && typeof item.src === 'string').map(item => item.src);
   }
 
   function trashed() {
@@ -285,6 +312,13 @@
     work.then(() => pendingDataWork.delete(work), () => pendingDataWork.delete(work));
     return work;
   }
+  async function flushDataWork() {
+    do {
+      if (pendingDataWork.size) await Promise.all(Array.from(pendingDataWork));
+      // A completed receipt save may still be inserting its expense reference.
+      await Promise.resolve();
+    } while (pendingDataWork.size);
+  }
   function queueImageWork(task) {
     const result = imageWork.then(task);
     imageWork = result.catch(() => {});
@@ -362,7 +396,13 @@
     const remember = id => beforePages.set(id, JSON.stringify(pages.get(id)));
     puts.forEach(p => remember(p.id)); dels.forEach(remember);
     if (replace) pages.forEach((_, id) => remember(id));
-    const images = changes.images || [], deletedImages = changes.deletedImages || [];
+    const images = changes.images || [];
+    // A page edited while IndexedDB commits is kept below. Its receipts must
+    // also survive that commit, even when preflight planned to remove the page.
+    // Defer these file deletions until a later sync finds the page truly absent.
+    const currentReceiptIds = new Set();
+    pages.forEach(page => { if (page.type === 'budget') blobReferences(page).forEach(id => currentReceiptIds.add(id)); });
+    const deletedImages = (changes.deletedImages || []).filter(id => !currentReceiptIds.has(id));
     const initialTomb = JSON.stringify(S.settings.tomb || {});
     const settings = replace || changes.tomb !== undefined ? JSON.parse(JSON.stringify(S.settings)) : null;
     if (settings) {
@@ -501,6 +541,66 @@
   }
 
   /* ---------- images ---------- */
+  const ATTACHMENT_LIMIT = 10 * 1024 * 1024;
+  const ATTACHMENT_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
+  async function attachmentInfo(blob) {
+    if (!blob || typeof blob.slice !== 'function' || typeof blob.arrayBuffer !== 'function' || !Number.isSafeInteger(blob.size) || blob.size <= 0) {
+      throw new Error('Choose a non-empty receipt or invoice file.');
+    }
+    if (blob.size > ATTACHMENT_LIMIT) throw new Error('Each receipt or invoice must be 10 MB or smaller.');
+    const bytes = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+    const starts = values => values.every((value, index) => bytes[index] === value);
+    const ascii = (offset, value) => Array.from(value).every((ch, index) => bytes[offset + index] === ch.charCodeAt(0));
+    let mime = '';
+    if (starts([137, 80, 78, 71, 13, 10, 26, 10])) mime = 'image/png';
+    else if (starts([255, 216, 255])) mime = 'image/jpeg';
+    else if (ascii(0, 'RIFF') && ascii(8, 'WEBP')) mime = 'image/webp';
+    else if (ascii(0, '%PDF-')) mime = 'application/pdf';
+    const declared = String(blob.type || '').toLowerCase();
+    if (!mime || (declared && declared !== 'application/octet-stream' && declared !== mime)) {
+      throw new Error('Receipts must be PNG, JPEG, WebP or PDF files with a matching file type.');
+    }
+    return { mime, size: blob.size };
+  }
+  function attachmentName(name, mime) {
+    const ext = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'application/pdf': '.pdf' }[mime];
+    let safe = String(name || 'Receipt').replace(/[\\/\u0000-\u001f\u007f]/g, '_').trim().slice(0, 220) || 'Receipt';
+    // Names arrive from backups and other PCs too. Keep the final extension
+    // consistent with the verified bytes instead of downloading e.g. HTML.
+    if (ext && !safe.toLowerCase().endsWith(ext)) safe += ext;
+    return safe;
+  }
+  function addAttachment(blob, meta) { return localImageWork(async () => {
+    const info = await attachmentInfo(blob);
+    const typedBlob = blob.type === info.mime ? blob : new Blob([blob], { type: info.mime });
+    const size = info.mime === 'application/pdf' ? { w: 0, h: 0 } : await U.imageSize(typedBlob);
+    if (info.mime !== 'application/pdf' && (!(size.w > 0) || !(size.h > 0))) throw new Error('This receipt image could not be read. Choose a different file.');
+    const now = Date.now();
+    const rec = {
+      id: U.uid(), blob: typedBlob, mime: info.mime, size: info.size,
+      w: size.w, h: size.h, name: attachmentName(meta && meta.name || blob.name, info.mime),
+      kind: 'attachment', created: now, mod: now
+    };
+    if (memoryOnly) memBlobs.set(rec.id, rec); else await db.put('blobs', rec);
+    emit('blobs');
+    return rec;
+  }); }
+  async function getAttachment(id) {
+    const rec = await getBlob(id);
+    if (!rec || rec.kind !== 'attachment') return null;
+    const info = await attachmentInfo(rec.blob);
+    if (rec.mime !== info.mime || !ATTACHMENT_MIMES.includes(rec.mime)) throw new Error('This receipt has an invalid file type.');
+    return Object.assign({}, rec, { name: attachmentName(rec.name, info.mime) });
+  }
+  // Restore an expense and its existing receipt references in the same queue
+  // as file deletions/sync. The commit callback must mutate pages synchronously
+  // and must not enqueue or await another image/attachment operation.
+  function withAttachments(ids, commit) { return localImageWork(async () => {
+    for (const id of new Set(ids || [])) {
+      if (!await getAttachment(id)) throw new Error('A receipt is no longer available. Sync its source folder before restoring this expense.');
+    }
+    return commit();
+  }); }
   function addImage(blob, meta) { return localImageWork(async () => {
     const size = await U.imageSize(blob);
     const rec = Object.assign({
@@ -546,6 +646,10 @@
   }
   /* o.remote = the deletion arrived from another PC through sync, so it is not recorded again */
   function delBlob(id, o) { return localImageWork(async () => {
+    if (o && o.unreferencedAttachment) {
+      const rec = await getBlob(id);
+      if (!rec || rec.kind !== 'attachment' || Array.from(pages.values()).some(page => blobReferences(page).includes(id))) return;
+    }
     if (memoryOnly) memBlobs.delete(id); else await db.del('blobs', id);
     if (!(o && o.remote)) { S.settings.tomb['i:' + id] = Date.now(); saveSettings(); }
     invalidateBlob(id);
@@ -580,10 +684,11 @@
     pages, settings: defaults(), ready: false, memoryOnly: false, otherWindow: false, winId,
     blank, defaults,
     on, off, emit,
-    init, flush, checkpoint, otherWindowsOpen, saveSettings, setSetting,
+    init, flush, checkpoint, trackDataWork, flushDataWork, otherWindowsOpen, saveSettings, setSetting,
     get, children, notebooks, isLive, live, path, notebookOf, descendants, trashed, ensureNotebook,
     create, update, touch, trash, restore, purge, move, duplicate, visit,
     addImage, getBlob, blobURL, listBlobs, delBlob, updateBlob, setImg,
+    addAttachment, getAttachment, withAttachments, attachmentInfo, attachmentLimit: ATTACHMENT_LIMIT,
     applyRemote, applySyncSnapshot, putBlobRecord, wipeLocal,
     imageRevision: () => imageRevision,
     isDirty: id => dirty.has(id),

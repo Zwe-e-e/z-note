@@ -88,6 +88,56 @@
     paint();
     return control;
   }
+  /* A stable path panel: normal sync status refreshes must not erase a draft. */
+  function pathPanel() {
+    let bound = dir(), dirty = false, busy = false, editing = !info().fullPath;
+    const pathBox = h('div.source-path', { tabindex: '0', 'aria-label': 'Connected notebook folder path' });
+    const hint = h('p.set-note');
+    const status = h('p.set-note', { role: 'status', 'aria-live': 'polite' });
+    const input = h('input.input', { type: 'text', placeholder: 'C:\\Users\\Your name\\Documents\\Z Note', spellcheck: 'false', autocomplete: 'off' });
+    input.addEventListener('input', () => { dirty = true; status.textContent = ''; });
+    const save = h('button.btn.sm', { type: 'button', onclick: async () => {
+      if (busy) return;
+      if (bound !== dir()) { render(); status.textContent = 'The connected folder changed. Enter its full path below.'; return; }
+      busy = true; render();
+      try {
+        await setPath(input.value);
+        dirty = false; editing = false;
+        status.textContent = 'Full path saved on this PC. The connected folder has not changed.';
+      } catch (error) { status.textContent = error.message || String(error); }
+      finally { busy = false; render(); }
+    } }, 'Save full path');
+    const copy = h('button.btn.sm', { type: 'button', onclick: async () => {
+      const latest = info();
+      if (!latest.connected || !latest.fullPath) { render(); return; }
+      try { await navigator.clipboard.writeText(latest.notebookPath); status.textContent = 'Full notebook path copied.'; }
+      catch (_) { status.textContent = 'Select the path above and copy it with Ctrl+C.'; }
+    } }, 'Copy path');
+    const edit = h('button.btn.sm.quiet', { type: 'button', onclick: () => { editing = !editing; render(); if (editing) input.focus(); } }, 'Edit path');
+    const label = h('span', 'Selected folder’s full path');
+    const editor = h('div.source-path-edit', h('label.source-path-label', label, input), save);
+    const panel = h('div.source-path-summary', h('b', 'Connected notebook folder'), pathBox, hint,
+      h('div.set-actions', copy, edit), editor, status);
+    function render() {
+      const value = info(), handle = dir();
+      if (bound !== handle) { bound = handle; dirty = false; editing = !value.fullPath; status.textContent = ''; }
+      pathBox.textContent = value.connected ? value.notebookPath : 'No source folder connected';
+      if (!dirty) input.value = value.fullPath ? value.parentPath : '';
+      hint.textContent = !value.connected ? 'Choose a sync folder below to keep a folder copy of your notebook.'
+        : value.fullPath ? 'Saved full path on this PC. If you move or rename this folder, edit the displayed path here.'
+        : 'Full path not saved yet. Browsers hide it; paste the selected folder’s path from File Explorer once to keep it visible here.';
+      label.textContent = 'Full path of selected folder “' + value.folderName + '”';
+      copy.disabled = !value.fullPath;
+      edit.hidden = !value.fullPath;
+      edit.textContent = editing ? 'Hide path editor' : 'Edit path';
+      editor.hidden = !value.connected || value.fullPath && !editing && !dirty;
+      input.disabled = busy || S.memoryOnly;
+      save.disabled = busy || S.memoryOnly || !value.connected;
+    }
+    render();
+    const off = S.on('sourcefolder', () => { if (panel.isConnected) render(); else off(); });
+    return panel;
+  }
   function open() {
     const handle = dir(), value = info();
     const pathBox = h('div.source-path', { tabindex: '0' }, value.notebookPath);
@@ -167,5 +217,5 @@
     S.on('sync', () => { if (current !== dir()) refresh(); });
     await refresh();
   }
-  ZN.sourceFolder = { init, refresh, info, setPath, clearPath, button, open };
+  ZN.sourceFolder = { init, refresh, info, setPath, clearPath, button, pathPanel, open };
 })();

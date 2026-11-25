@@ -1101,7 +1101,8 @@
     async function reload() {
       const list = await S.listBlobs();
       if (!alive) return;
-      all = list;
+      // Receipts belong to their expense entries, including PDF documents.
+      all = list.filter(b => b.kind !== 'attachment');
       render();
     }
     const queueReload = U.debounce(reload, 60);
