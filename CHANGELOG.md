@@ -1,5 +1,18 @@
 # Z Note release history
 
+## v2.6.0 — 2026-11-25
+
+- Add an optional **Budget & expenses** page inside any notebook. Create, move, duplicate, trash and restore it like other pages.
+- Track expenses by date, description, category and amount, with notes and a separate budget for each month. Show monthly spending, remaining funds and a category pie chart. New pages use SGD; currency can be changed per page without converting amounts.
+- Attach multiple PDF, PNG, JPG or WebP receipts and invoices to each expense, up to 10 MB per file. Include receipt files in backups and notebook folder sync.
+- Preserve an open expense draft when another PC sends a newer page through Sync. Prevent stale saves from overwriting it and keep receipt saves together with their expense references.
+- Validate complete backups and incoming receipts before restoring, and preserve shared receipts when duplicate pages still use them.
+- Add **Ctrl+Z** undo and **Ctrl+Y / Ctrl+Shift+Z** redo for saved budget changes and task actions, including priority changes and moves between lists. Keep native text undo while typing. History belongs to the current open page and is cleared when it is reopened or replaced by sync.
+- Keep the connected notebook folder path visible directly in **Sync & backup**, including when syncing is paused. Add **Copy path** and an inline full-path field that remembers the selected folder's display path on this PC.
+- Add the owner's PayLah QR to **Donate** as a Singapore-dollar option alongside PayPal USD donations, with an original-image download. The same dialog is used by the app and download page.
+
+Update every PC to v2.6.0 or later before sharing notebooks with budget pages or restoring their backups. Earlier versions do not understand this page type; older backup restore can omit budget pages and receipt files. The Windows helper and existing note/task data are unchanged.
+
 ## v2.5.1 — 2026-11-23
 
 - Add the MIT license and third-party credits. Include the full license in the portable quick guide while preserving compatibility with existing automatic updaters.

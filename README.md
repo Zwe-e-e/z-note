@@ -1,8 +1,8 @@
 # Z Note
 
-**Current release: [v2.5.1](https://github.com/Zwe-e-e/z-note/releases/tag/v2.5.1)** · Released 23 November 2026 · [Release history](CHANGELOG.md)
+**Current release: [v2.6.0](https://github.com/Zwe-e-e/z-note/releases/tag/v2.6.0)** · Released 25 November 2026 · [Release history](CHANGELOG.md)
 
-**New in v2.5.1:** An MIT open-source license, third-party credits and optional PayPal donations from the app and download page. All features remain free. Notes, source-folder settings and the notebook format are unchanged.
+**New in v2.6.0:** Optional Budget & expenses pages with monthly summaries, pie charts and receipt attachments; undo and redo for tasks and budgets; a visible connected-folder path in Sync & backup; and PayLah donations for Singapore. Z Note remains free and open source under the MIT license. Existing notes and source-folder settings are preserved.
 
 Includes A/B/C task priorities with a remembered one- or three-column view, tasks from every list together, sticky-note alignment guides, and the blue Z-icon portable launcher. Existing task content and stored priorities remain unchanged until you edit them.
 
@@ -35,11 +35,25 @@ Each person gets their own notebook. The shared download contains application fi
 
 Keep **Z Note.exe**, **Z Note.html** and the **app** folder together. The icon launcher finds the app beside itself, so the whole folder can move to another drive or PC. To add a desktop icon on that PC, right-click **Z Note.exe** and choose **Show more options → Send to → Desktop (create shortcut)**. A desktop shortcut belongs to that PC; the portable ZIP uses the launcher itself.
 
+## Budget & expenses (v2.6.0)
+
+Open any notebook and click **New budget & expenses**, or choose **New → Budget & expenses**. This creates a separate page; existing notes and tasks stay as they are. Rename, move, duplicate or remove it through the usual page controls. Removed pages can be restored from Trash.
+
+Choose a month, set its budget, and add expenses with a date, description, category, amount and optional notes. The page shows that month's total spending, remaining budget (or overspending), and a category pie chart. New pages use **SGD**. Changing the page currency changes the labels without converting existing values.
+
+Attach one or more **PDF, PNG, JPG or WebP** receipts or invoices to each expense, up to **10 MB per file**. Click a receipt name to download it. Receipts are saved with the notebook and included in backups and folder sync; they do not appear in the Snips gallery. Save or cancel any open expense editor before making a backup.
+
+Use **Ctrl+Z** to undo saved budget changes, or **Ctrl+Y / Ctrl+Shift+Z** to redo. The same shortcuts work for task actions on lists and the main Tasks page, including completion, priorities and moves between lists. On Mac, use Command instead of Ctrl. While typing in a field, undo applies to that text. Page history lasts for the current open view and resets when you reopen it or sync replaces its data; it is not a substitute for backups.
+
+**Update every PC to v2.6.0 or later before syncing a notebook with budget pages or restoring its backup.** Older versions cannot read these pages, and their backup importer can omit budget pages and receipts. Keep a backup when upgrading. Large receipt collections also make backups larger; if the Windows updater's recovery-backup limit is reached, it offers the manual update route.
+
 ## Folder saving and backups
 
 Choose a folder when setting up so your notes are saved as files as well as in browser storage. If the browser asks for permission again later, use **Allow** to reconnect it.
 
 The sidebar shows **Source folder** and the notebook location. Click it to copy the location, locate the connected folder, sync now, or open an existing notebook. Browsers expose the folder name rather than its full Windows path. You can paste the selected folder's full path from File Explorer into the details dialog; this optional display label stays in that browser and does not change where notes are saved.
+
+**Style & data → Sync & backup** also keeps the connected notebook path visible above the sync controls. If its full path has not been saved yet, paste the selected folder's path into the inline field and click **Save full path**. It stays visible on subsequent visits, even while folder access is paused. Use **Copy path** to copy it, or **Edit path** after moving or renaming the folder. This is a saved display path, not a path the browser can discover or verify automatically.
 
 To open an existing notebook, use **Open existing notebook…** in setup, the Source folder dialog, or **Style & data → Sync & backup**. Select **Z Note notebook** itself or the folder containing it. Z Note loads its pages and pictures together. If files are incomplete or still downloading, it explains the problem and keeps the previous notebook connection. If this browser already contains your own notes, the app asks how to combine them with the folder's notebook.
 
@@ -98,6 +112,8 @@ Z Note is free and open source under the [MIT License](LICENSE). You may use, mo
 
 Donations are optional support for development. They do not unlock features or change the license; all Z Note features are available without donating.
 
+In the Donate dialog, choose **PayLah! · Singapore (SGD)** to scan the owner's QR or save its original image. Review the recipient and amount in PayLah before confirming. **PayPal · USD** keeps the $1, $3 and $5 choices. The app and download page share this dialog; payments are completed in the chosen service.
+
 See [third-party components and credits](THIRD_PARTY_NOTICES.md) for the Mulberry32 algorithm, development tools and installed platform dependencies. The portable package includes the full MIT License and algorithm credit in `START HERE.txt`.
 
 ## Development
@@ -116,6 +132,7 @@ node --test tests/sync.test.cjs tests/checkpoint.test.cjs tests/auto-update.test
 node --test tests/db-sync.test.cjs tests/store-sync.test.cjs
 node --test tests/todo-priority.test.cjs tests/main-tasks.test.cjs tests/drag-columns.test.cjs
 node --test tests/board-snap.test.cjs tests/board-snap-gesture.test.cjs
+node --test tests/budget*.test.cjs
 ```
 
 To build and test the Windows helper, then rebuild the portable ZIP in PowerShell:
@@ -134,6 +151,6 @@ powershell -NoProfile -File tests/test-package.ps1
 
 The packaging script includes only the app, launcher and quick guide, and verifies the archive contents. Personal notebooks, exported backups and credentials must never be published. `.gitignore` excludes standard notebook and backup paths; only the curated portable ZIP is allowed.
 
-For v2.5.1, publish the full 38-file `downloads/Z-Note-Portable.zip` through Pages. `-LegacyUpdater` builds the 37-file `downloads/Z-Note-v2.5.1-Portable.zip` for existing automatic updaters; it preserves the installed launcher. Attach that versioned ZIP to the GitHub release. Name the full icon download `Z-Note-v2.5.1-With-Icon.zip` to keep the two routes distinct. The unchanged v2.5.0 helper accepts both layouts and uses the organization's repository for automatic updates. The full download includes a launcher with the current version. Keep the earlier v2.5.0 migration release available for installed v2.4.2 and older clients, which cannot automatically follow the repository-owner change.
+For v2.6.0, publish the full 38-file `downloads/Z-Note-Portable.zip` through Pages. `-LegacyUpdater` builds the 37-file `downloads/Z-Note-v2.6.0-Portable.zip` for existing automatic updaters; it preserves the installed launcher. Attach that versioned ZIP to the GitHub release. Name the full icon download `Z-Note-v2.6.0-With-Icon.zip` to keep the two routes distinct. The unchanged v2.5.0 helper accepts both layouts and uses the organization's repository for automatic updates. The full download includes a launcher with the current version. Keep the earlier v2.5.0 migration release available for installed v2.4.2 and older clients, which cannot automatically follow the repository-owner change.
 
 GitHub Pages publishes the `main` branch, repository root. Rebuild the ZIP whenever application files change so the download matches the source.

@@ -1,11 +1,30 @@
 Z NOTE - PORTABLE BROWSER APP
-Version 2.5.1 - released 23 November 2026
+Version 2.6.0 - released 25 November 2026
 Check your installed version at the bottom of the sidebar or in Style & data.
 Use "Check for updates" in the sidebar or Style & data > Updates.
 
-NEW IN 2.5.1
+NEW IN 2.6.0
+Donate now offers PayLah for Singapore (SGD), alongside PayPal (USD). Scan the
+owner's QR and review the recipient and amount in PayLah before confirming.
+Save QR image keeps the original image. All donations remain optional.
+Open a notebook and choose New budget & expenses, or use New > Budget & expenses.
+Set a budget for each month, add expenses, and see monthly totals and a category
+pie chart. Each page starts in SGD. Changing currency changes labels only; it
+does not convert existing amounts.
+Attach PDF, PNG, JPG or WebP receipts and invoices to each expense (up to 10 MB
+per file). Receipts are included in backups and source-folder sync. Click a
+receipt name to download it. Save or cancel an expense draft before exporting.
+Remove a budget page through its page menu; it can be restored from Trash.
+Use Ctrl+Z to undo saved budget changes and task actions. Redo with Ctrl+Y or
+Ctrl+Shift+Z. While typing, these shortcuts apply to the text field. Undo history
+lasts while that page stays open; reopening or incoming sync resets it.
+Update ALL PCs to 2.6.0 or later before sharing notebooks with budget pages or
+restoring their backups. Older versions cannot read budget pages and may omit
+them from a restored backup. Save a backup before updating your other PCs.
+
+ALSO INCLUDED SINCE 2.5.1
 Z Note is released under the MIT open-source license, with third-party credits.
-Donate in the app or on the download page to support development through PayPal.
+Donate in the app or on the download page to support development.
 Donations are optional. All features remain free, and notes and source-folder
 settings are unchanged. The full license and credits appear at the end of this guide.
 
@@ -51,6 +70,12 @@ folder's notebook.
 If the browser asks again after reopening, click "Allow" in Z Note to resume
 folder access. You can manage the folder and download or restore a backup in:
     Style & data > Sync & backup
+
+This dialog always shows the connected notebook folder location. If the full
+path is not saved, paste the selected folder's full path from File Explorer
+and click Save full path. It stays visible here, with a Copy path button.
+Browsers cannot discover the full path automatically. Use Edit path if you
+move or rename the folder; the saved display path does not move your notes.
 
 SOURCE FOLDER LOCATION
 The bottom of the sidebar shows your source folder and "Z Note notebook".
@@ -197,5 +222,8 @@ CC0: https://creativecommons.org/publicdomain/zero/1.0/
 Windows, .NET Framework, browsers and system font files are not included in
 this portable package; their own licenses apply to those installed components.
 Node.js and Playwright are development tools and are not included either.
+The PayLah QR is supplied by the project owner. PayLah and DBS names and marks
+belong to their respective owners; their display does not imply endorsement.
+No PayPal or PayLah SDK or payment-processing library is bundled.
 For the source repository's dependency inventory, see:
 https://github.com/Zwe-e-e/z-note/blob/main/THIRD_PARTY_NOTICES.md

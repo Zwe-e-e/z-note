@@ -29,6 +29,8 @@ Update checks retrieve public release information and application packages from 
 
 Optional donations open a public PayPal.Me link only after the user chooses to continue with PayPal. PayPal hosts the payment page; no PayPal SDK or payment-processing code is bundled with Z Note. PayPal's account terms and fees apply separately.
 
+The PayLah donation option displays the project owner's supplied QR image, preserved as an embedded PNG. Payments are handled in PayLah, with no PayLah SDK or payment-processing library bundled. PayLah and DBS names and marks belong to their respective owners; their display does not imply endorsement of Z Note.
+
 ## Portable license text
 
 `START HERE.txt` includes the full Z Note MIT License and the Mulberry32 credit. Keeping these in an existing package file lets recipients retain the license without adding archive entries that older automatic updaters reject. Keep the full license text when redistributing copies or substantial portions of Z Note.
