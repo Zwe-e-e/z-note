@@ -54,6 +54,10 @@
 .source-folder-label { font: 600 11px/1.4 var(--font-sans); }
 .source-folder-value { font: 400 11px/1.5 var(--font-sans); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .source-path { padding: 12px 14px; border: 1px solid var(--rule-2); border-radius: 6px; background: var(--paper-2); font: 13px/1.6 var(--font-sans); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.source-path-summary { display: grid; gap: 10px; min-width: 0; }
+.source-path-summary .source-path-edit { margin-top: 0; }
+.source-path-summary .source-path-edit > .btn { margin-top: 10px; }
+.source-path-summary [hidden], .source-path-summary [role="status"]:empty { display: none; }
 .source-path-edit { border-top: 1px dashed var(--rule-2); margin-top: 18px; padding-top: 12px; }
 .source-path-label { display: grid; gap: 7px; font: 600 13px/1.5 var(--font-sans); }
 .source-path-label input { width: 100%; min-width: 0; font-weight: 400; }
@@ -450,3 +454,83 @@ html[data-paper="night"] .seg button.on { color: var(--ink); }
 .sync-chip.warn { color: var(--red); }
 .sync-chip.busy { cursor: progress; }
 @keyframes zn-spin { to { transform: rotate(360deg); } }
+
+/* ---------- monthly budget & expense pages ---------- */
+.budget-page { max-width: 1220px; padding-bottom: 56px; }
+.budget-intro { margin: -4px 0 22px; color: var(--ink-2); font: 14px/1.6 var(--font-sans); }
+.budget-toolbar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
+.budget-toolbar > .btn { min-height: 37px; }
+.budget-toolbar > .btn.primary { margin-left: auto; }
+.budget-field { display: flex; flex-direction: column; align-items: stretch; gap: 7px; min-width: 0; font: 13px/1.4 var(--font-sans); }
+.budget-field > span { color: var(--ink-2); font-weight: 600; }
+.budget-field .input { width: 100%; min-width: 0; }
+.budget-toolbar input[type="month"] { width: 172px; }
+.budget-toolbar select { min-width: 88px; }
+.budget-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 28px; }
+.budget-stat { padding: 18px 19px 16px; background: var(--paper-2); border: 1px solid var(--rule-2); border-radius: 8px 11px 9px 10px; }
+.budget-stat:first-child { background: var(--accent-soft); border-color: var(--accent); }
+.budget-stat h2 { font: 500 13px/1.4 var(--font-sans); color: var(--ink-2); margin: 0 0 7px; }
+.budget-stat strong { display: block; font: 600 clamp(18px, 2vw, 27px)/1.3 var(--font-sans); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.budget-stat small { display: block; margin-top: 6px; color: var(--ink-3); font: 12px/1.5 var(--font-sans); }
+.budget-stat.budget-over strong { color: var(--red); }
+.budget-breakdown { padding: 22px; border: 1px dashed var(--rule-2); border-radius: 11px; margin-bottom: 30px; }
+.budget-breakdown h2, .budget-list-heading h2 { font: var(--head-weight, 400) 25px/1.2 var(--font-head); margin: 0; }
+.budget-chart-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: center; margin-top: 20px; }
+.budget-pie { width: 200px; height: 200px; border-radius: 50%; border: 1px solid var(--rule-2); box-shadow: 2px 3px 0 var(--rule); flex: none; }
+.budget-pie.empty { display: grid; place-items: center; background: var(--paper-3); padding: 20px; margin: 0; color: var(--ink-3); font: 17px var(--font-hand); }
+.budget-empty-chart { max-width: 350px; color: var(--ink-3); font: 14px/1.7 var(--font-sans); }
+.budget-legend { margin: 0; padding: 0; list-style: none; }
+.budget-legend li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 45px; gap: 9px; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--rule); font: 12.5px/1.4 var(--font-sans); }
+.budget-legend li:last-child { border-bottom: 0; }
+.budget-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #0002; }
+.budget-category { overflow-wrap: anywhere; }
+.budget-category-total { font-weight: 600; font-variant-numeric: tabular-nums; }
+.budget-percentage { color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums; }
+.budget-list-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.budget-list-heading > span { color: var(--ink-3); font-size: 12.5px; }
+.budget-announcement { color: var(--ink-2); font-size: 13px; margin-bottom: 12px; }
+.budget-announcement:empty { display: none; }
+.budget-table-scroll { overflow-x: auto; }
+.budget-table { width: 100%; border-collapse: collapse; text-align: left; font: 13px/1.5 var(--font-sans); }
+.budget-table th { color: var(--ink-3); font-weight: 500; padding: 10px 9px; border-bottom: 1.5px solid var(--rule-2); white-space: nowrap; }
+.budget-table td { padding: 13px 9px; border-bottom: 1px dashed var(--rule); vertical-align: top; }
+.budget-table tbody tr:last-child td { border-bottom: 0; }
+.budget-date { white-space: nowrap; color: var(--ink-2); }
+.budget-description { min-width: 150px; max-width: 310px; overflow-wrap: anywhere; }
+.budget-expense-title { border: 0; padding: 0; background: transparent; text-align: left; color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
+.budget-expense-title:hover { text-decoration-color: var(--accent); }
+.budget-description p { white-space: pre-wrap; color: var(--ink-3); font-size: 12px; margin-top: 5px; }
+.budget-amount { text-align: right; white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
+.budget-receipts { min-width: 130px; max-width: 210px; }
+.budget-file { display: block; max-width: 190px; padding: 2px 0; border: 0; background: transparent; color: var(--accent); text-align: left; font: 12px/1.5 var(--font-sans); overflow-wrap: anywhere; }
+.budget-file:hover { text-decoration: underline; }
+.budget-file:disabled { color: var(--ink-3); cursor: default; }
+.budget-row-actions { display: flex; align-items: center; gap: 2px; }
+.budget-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.budget-form-fields { border: 0; padding: 0; margin: 0; display: grid; gap: 15px; min-width: 0; }
+.budget-editor .modal-body { padding-bottom: 22px; }
+.budget-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.budget-form textarea { resize: vertical; min-height: 66px; }
+.budget-form-actions { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px dashed var(--rule-2); padding-top: 15px; }
+.budget-help { color: var(--ink-3); font: 12px/1.6 var(--font-sans); }
+.budget-form-error { margin-top: 12px; color: var(--red); font: 13px/1.5 var(--font-sans); }
+.budget-form-error:empty { display: none; }
+.budget-existing-file { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 1px dashed var(--rule); padding: 5px 0; }
+.budget-existing-file > span { overflow-wrap: anywhere; min-width: 0; }
+.budget-upload { max-width: 100%; font: 12px/1.5 var(--font-sans); }
+.budget-form-fields:disabled { opacity: .65; }
+@media (max-width: 900px) {
+  .budget-chart-layout { grid-template-columns: 160px minmax(0, 1fr); gap: 22px; }
+  .budget-pie { width: 160px; height: 160px; }
+  .budget-summary { gap: 9px; }
+  .budget-stat { padding: 14px; }
+}
+@media (max-width: 620px) {
+  .budget-summary { grid-template-columns: 1fr; }
+  .budget-toolbar > .btn.primary { margin-left: 0; }
+  .budget-chart-layout { grid-template-columns: 1fr; }
+  .budget-pie { margin: 0 auto; }
+  .budget-pie.empty { margin: 0 auto; }
+  .budget-form-grid { grid-template-columns: 1fr; }
+  .budget-breakdown { padding: 17px; }
+}

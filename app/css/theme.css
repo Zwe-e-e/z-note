@@ -298,6 +298,7 @@ button.chip:hover { border-color: var(--ink-2); color: var(--ink); }
   font: 14px/1.65 var(--font-sans);
 }
 .donate-dialog::backdrop { background: #202b3a66; }
+.donate-dialog.paylah { width: min(660px, calc(100vw - 32px)); }
 .donate-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .donate-head h2 { font: 30px/1.2 var(--font-hand); }
 .donate-amounts { border: 0; padding: 0; margin: 24px 0 16px; display: flex; gap: 12px; }
@@ -312,6 +313,15 @@ button.chip:hover { border-color: var(--ink-2); color: var(--ink); }
 .donate-option small { flex-basis: 100%; text-align: center; color: var(--ink-2); font-size: 11px; }
 .donate-dialog .donate-paypal { width: 100%; margin: 6px 0; justify-content: center; text-decoration: none; }
 .donate-note { color: var(--ink-2); font-size: 12px; margin: 12px 0 0; }
+.donate-methods { border: 0; padding: 0; margin: 20px 0 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.donate-methods legend { font-size: 13px; color: var(--ink-2); margin-bottom: 10px; }
+.donate-method { flex: 1; min-width: 170px; display: flex; align-items: center; gap: 10px; padding: 12px; border: 1.5px solid var(--rule-2); border-radius: 7px; cursor: pointer; }
+.donate-method:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); }
+.donate-method input { accent-color: var(--accent); }
+.donate-method small { display: block; color: var(--ink-2); font-size: 12px; margin-top: 3px; }
+.donate-panel[hidden] { display: none; }
+.donate-paylah-qr { display: block; width: 100%; height: auto; margin: 16px auto; background: white; }
+.donate-qr-save { display: flex; justify-content: center; text-decoration: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
