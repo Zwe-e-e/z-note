@@ -1,5 +1,19 @@
 # Z Note release history
 
+## v2.6.1 — 2026-11-26
+
+- Offer categories already used on active expense pages in the Category dropdown, including expenses outside the selected period. Keep custom category entry and existing expense labels unchanged.
+- Add **Weekly**, **Monthly**, **Yearly**, and **Project** periods to Budget & expenses. Weeks run Monday–Sunday; projects use saved start and end dates, both included. Totals, category pie charts, and expense lists use the selected period.
+- Keep separate budgets for each week, year, and project date range while preserving existing monthly budgets, expenses, and receipts. Remember the page's period mode and project dates, include them in sync and backups, and support Undo/Redo for period and budget changes.
+- Detect when a browser window is still running an older version than the files on disk. Offer a saved reload instead of trying to install the same release again.
+- Let the Windows helper acknowledge an already-installed version safely, including for older app windows, after validating the recovery backup and completing any pending recovery.
+- Recover from the older helper's “already current” response with **Reload installed version** or **Back to my notes**. Keep a **Close Z Note** action available for genuinely unconfirmed updates, with a final save before closing and guidance if the browser requires its window-close button.
+- Keep editing and sync protected when a final save fails, and provide **Retry save and reload**.
+- Wrap long recovery-backup paths inside the update dialog.
+- Show the full saved source-folder path without truncating it in the sidebar, and use the same **Folder on this PC** panel in Source folder and Sync & backup. Add **Copy sync instructions**, including a location inside OneDrive when recognizable, to help find the same notebook on another PC. Refresh the sidebar as soon as its folder connection is restored.
+
+Use v2.6.1 on each PC for the new period controls and category suggestions. v2.6.0 retains the added period settings but displays monthly reports only. Existing expenses, receipt files and monthly budgets are preserved.
+
 ## v2.6.0 — 2026-11-25
 
 - Add an optional **Budget & expenses** page inside any notebook. Create, move, duplicate, trash and restore it like other pages.

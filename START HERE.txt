@@ -1,7 +1,33 @@
 Z NOTE - PORTABLE BROWSER APP
-Version 2.6.0 - released 25 November 2026
+Version 2.6.1 - released 26 November 2026
 Check your installed version at the bottom of the sidebar or in Style & data.
 Use "Check for updates" in the sidebar or Style & data > Updates.
+
+NEW IN 2.6.1
+The expense Category dropdown includes categories already used on your expense
+pages, across all dates. Choose one or type a new category; blank uses Other.
+Budget & expenses now has a Period selector: Monthly, Weekly, Yearly or Project.
+Weeks run Monday to Sunday. Project lets you save a custom start and end date;
+both dates are included in the expense list, totals and category pie chart.
+Use one expense page per project and give the page your project's name.
+Set a separate budget for the selected week, month, year or project date range.
+Changing a project range keeps its previous budget saved for the original dates.
+All expenses and receipts are kept, including those outside the selected period.
+Existing pages stay monthly until you change them. The chosen mode and project
+dates are remembered and included in sync/backups. Ctrl+Z can undo these changes.
+Older v2.6.0 copies retain these settings but only display monthly reports;
+use v2.6.1 on each PC for the new period controls and category suggestions.
+
+If the app files are already updated but an old window is still open, use Reload
+installed version to save your notes and load the installed app. Update errors
+now provide a safe way to return to your notes or close Z Note for recovery.
+Long recovery-backup paths wrap inside the dialog.
+Source folder and Sync & backup show the same "Folder on this PC" panel.
+Paste the selected folder's full address from File Explorer once, then use
+Copy path or Copy sync instructions. For recognizable OneDrive locations, the
+panel also shows where to find the notebook inside that OneDrive account.
+The other PC's drive letter or user folder may differ. Open existing notebook
+on that PC and select the same shared notebook; copying a path does not sync it.
 
 NEW IN 2.6.0
 Donate now offers PayLah for Singapore (SGD), alongside PayPal (USD). Scan the
