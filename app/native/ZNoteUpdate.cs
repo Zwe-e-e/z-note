@@ -440,6 +440,18 @@ namespace ZNote.NativeHost
             {
                 UpdateTransaction transaction = new UpdateTransaction(root, state); transaction.Recover();
                 string current = File.ReadAllText(UpdateFiles.Under(root, "VERSION.txt")).Trim();
+                int order = UpdateFiles.CompareVersions(requested, current);
+                if (order == 0)
+                {
+                    // A browser window can still have the previous JavaScript
+                    // loaded after these app files were updated. Confirm the
+                    // requested version only after recovery and under the same
+                    // installation lock, so older clients can safely reload.
+                    installed = true;
+                    Dictionary<string, object> reply = Reply("installed"); reply["version"] = current; reply["backupPath"] = saved; send(reply);
+                    return;
+                }
+                if (order < 0) throw new InvalidDataException("This app is already newer than the requested update. Reopen Z Note and check for updates again.");
                 Progress("Checking the official GitHub release and package checksum…");
                 UpdatePackage package = UpdatePackage.Latest(requested, current);
                 string zip = UpdateFiles.Under(state, "package-" + Guid.NewGuid().ToString("N") + ".zip");
