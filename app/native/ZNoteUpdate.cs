@@ -73,6 +73,23 @@ namespace ZNote.NativeHost
             using (FileStream stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             { stream.Write(bytes, 0, bytes.Length); stream.Flush(true); }
         }
+        internal static void CopyDurable(string source, string destination)
+        {
+            // Create our own staging file rather than inheriting the source's
+            // read-only/cloud attributes through File.Copy.
+            CheckRedirects(source); CheckRedirects(destination);
+            using (Stream input = File.OpenRead(source))
+            using (FileStream output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            { input.CopyTo(output); output.Flush(true); }
+        }
+        internal static FileAttributes? ReadAttributes(string path)
+        {
+            // File.Exists returns false for access errors too. Recovery must
+            // distinguish a genuinely missing journal from unreadable state.
+            try { return File.GetAttributes(path); }
+            catch (FileNotFoundException) { return null; }
+            catch (DirectoryNotFoundException) { return null; }
+        }
         internal static void AtomicText(string path, string text)
         {
             string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -250,21 +267,73 @@ namespace ZNote.NativeHost
     internal sealed class UpdateTransaction
     {
         private readonly string root, state, pending, journal;
+        internal string FailureOutcome { get; private set; }
         internal UpdateTransaction(string applicationRoot, string stateRoot)
         {
+            FailureOutcome = "recovery-required";
             root = Path.GetFullPath(applicationRoot); state = Path.GetFullPath(stateRoot);
             UpdateFiles.CheckRedirects(root); UpdateFiles.CheckRedirects(state);
             Directory.CreateDirectory(state);
             pending = UpdateFiles.Under(state, "pending"); journal = UpdateFiles.Under(state, "transaction.json");
         }
-        internal void Recover()
+        internal void Recover(bool requireJournal = false, List<object> expectedRecords = null)
         {
-            if (!File.Exists(journal)) return;
+            FileAttributes? journalAttributes = UpdateFiles.ReadAttributes(journal);
+            if (!journalAttributes.HasValue)
+            {
+                if (requireJournal) throw new IOException("The interrupted update recovery record is missing. Close Z Note and keep its recovery files for repair.");
+                return;
+            }
+            if ((journalAttributes.Value & FileAttributes.Directory) != 0) throw new IOException("The update recovery record is not a file. Close Z Note and keep its recovery files for repair.");
+            UpdateFiles.CheckRedirects(journal);
             IDictionary<string, object> record = UpdateFiles.Json(1024 * 1024).DeserializeObject(File.ReadAllText(journal)) as IDictionary<string, object>;
             object raw;
             if (record == null || UpdateFiles.Text(record, "root") != root || !record.TryGetValue("files", out raw) || !(raw is object[]))
                 throw new IOException("The previous update needs recovery. Keep the app folder and contact the Z Note maintainer.");
             object[] files = (object[])raw;
+            // Every released transaction records all 37 required runtime
+            // files, optionally plus the icon launcher. Validate the entire
+            // record before touching any target, including startup recovery.
+            HashSet<string> recoveryPaths = new HashSet<string>(StringComparer.Ordinal);
+            if (files.Length < UpdateFiles.Allowed.Length - 1 || files.Length > UpdateFiles.Allowed.Length)
+                throw new IOException("The update recovery record is incomplete. Close Z Note and keep its recovery files for repair.");
+            foreach (object item in files)
+            {
+                IDictionary<string, object> file = item as IDictionary<string, object>;
+                string relative = file == null ? null : UpdateFiles.Text(file, "path");
+                object existed, hash;
+                if (relative == null || !UpdateFiles.AllowSet.Contains(relative) || !recoveryPaths.Add(relative) ||
+                    !file.TryGetValue("existed", out existed) || !(existed is bool) || !file.TryGetValue("hash", out hash) ||
+                    ((bool)existed ? !(hash is string) || !Regex.IsMatch((string)hash, "^[a-f0-9]{64}$") : hash != null))
+                    throw new IOException("Invalid update recovery record. Close Z Note and keep its recovery files for repair.");
+            }
+            foreach (string relative in UpdateFiles.Allowed)
+                if (relative != "Z Note.exe" && !recoveryPaths.Contains(relative))
+                    throw new IOException("The update recovery record is missing a required application file.");
+            if (expectedRecords != null)
+            {
+                Dictionary<string, IDictionary<string, object>> expected = new Dictionary<string, IDictionary<string, object>>(StringComparer.Ordinal);
+                foreach (Dictionary<string, object> entry in expectedRecords) expected.Add((string)entry["path"], entry);
+                if (files.Length != expected.Count) throw new IOException("The update recovery record changed during installation.");
+                foreach (object item in files)
+                {
+                    IDictionary<string, object> entry = item as IDictionary<string, object>, original;
+                    string relative = entry == null ? null : UpdateFiles.Text(entry, "path");
+                    object existed;
+                    if (relative == null || !expected.TryGetValue(relative, out original) || !entry.TryGetValue("existed", out existed) ||
+                        !Object.Equals(existed, original["existed"]) || UpdateFiles.Text(entry, "hash") != (string)original["hash"])
+                        throw new IOException("The update recovery record changed during installation.");
+                    expected.Remove(relative);
+                }
+            }
+            // Verify every original backup before the first rollback write.
+            // A corrupt later entry must not leave an earlier file restored.
+            foreach (IDictionary<string, object> file in files)
+                if ((bool)file["existed"])
+                {
+                    string old = UpdateFiles.Under(pending, "old/" + (string)file["path"]);
+                    if (UpdateFiles.FileHash(old) != (string)file["hash"]) throw new IOException("The previous update backup could not be verified. Your notebook is untouched.");
+                }
             foreach (object item in files)
             {
                 IDictionary<string, object> file = item as IDictionary<string, object>;
@@ -276,12 +345,21 @@ namespace ZNote.NativeHost
                 {
                     string old = UpdateFiles.Under(pending, "old/" + relative);
                     if (!File.Exists(old) || UpdateFiles.FileHash(old) != UpdateFiles.Text(file, "hash")) throw new IOException("The previous update backup could not be verified. Your notebook is untouched.");
-                    ReplaceFile(old, target);
+                    // Recovery is idempotent. A file already at its verified
+                    // original bytes needs no write (and may now be read-only).
+                    if (!UpdateFiles.ReadAttributes(target).HasValue || UpdateFiles.FileHash(target) != UpdateFiles.Text(file, "hash")) ReplaceFile(old, target);
+                    if (UpdateFiles.FileHash(target) != UpdateFiles.Text(file, "hash")) throw new IOException("The restored application file could not be verified. Reopen Z Note to finish recovery.");
                 }
-                else if (File.Exists(target)) { UpdateFiles.CheckRedirects(target); File.Delete(target); }
+                else if (UpdateFiles.ReadAttributes(target).HasValue)
+                {
+                    UpdateFiles.CheckRedirects(target); File.Delete(target);
+                    if (UpdateFiles.ReadAttributes(target).HasValue) throw new IOException("A new application file could not be removed during recovery.");
+                }
             }
             File.Delete(journal);
-            CleanupPending();
+            // The verified rollback is complete. Staging cleanup must not turn
+            // a restored app into an unconfirmed transaction.
+            try { CleanupPending(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
         private static void ReplaceFile(string source, string target)
         {
@@ -308,13 +386,24 @@ namespace ZNote.NativeHost
         private static void DeleteStagingTree(string directory)
         {
             UpdateFiles.CheckRedirects(directory);
-            foreach (string file in Directory.GetFiles(directory)) { UpdateFiles.CheckRedirects(file); File.Delete(file); }
+            foreach (string file in Directory.GetFiles(directory))
+            {
+                UpdateFiles.CheckRedirects(file);
+                // Older versions copied ReadOnly into this generated tree.
+                // Clear it only on disposable staging files, never app data.
+                FileAttributes attributes = File.GetAttributes(file);
+                if ((attributes & FileAttributes.ReadOnly) != 0) File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
+                File.Delete(file);
+            }
             foreach (string child in Directory.GetDirectories(directory)) DeleteStagingTree(child);
             Directory.Delete(directory, false);
         }
         internal void Apply(string zip, string version, Action<string> progress, Action<int> afterFile)
         {
-            Recover(); CleanupPending();
+            FailureOutcome = "recovery-required";
+            Recover();
+            FailureOutcome = "unchanged";
+            CleanupPending();
             Directory.CreateDirectory(pending);
             string stage = UpdateFiles.Under(pending, "new"); Directory.CreateDirectory(stage);
             List<string> files = UpdatePackage.Extract(zip, stage, version);
@@ -322,19 +411,22 @@ namespace ZNote.NativeHost
             foreach (string relative in files)
             {
                 string target = UpdateFiles.Under(root, relative);
-                if (Directory.Exists(target)) throw new IOException("An application file is occupied by a folder.");
-                bool existed = File.Exists(target); string hash = null;
+                FileAttributes? attributes = UpdateFiles.ReadAttributes(target);
+                if (attributes.HasValue && (attributes.Value & FileAttributes.Directory) != 0) throw new IOException("An application file is occupied by a folder.");
+                if (attributes.HasValue && (attributes.Value & FileAttributes.ReadOnly) != 0)
+                    throw new UnauthorizedAccessException("The application file " + target + " is read-only. Close Z Note and check that this PC has a writable local copy of the app. Your app has not been changed.");
+                bool existed = attributes.HasValue; string hash = null;
                 if (existed)
                 {
                     string old = UpdateFiles.Under(pending, "old/" + relative);
                     Directory.CreateDirectory(Path.GetDirectoryName(old));
-                    File.Copy(target, old, false); hash = UpdateFiles.FileHash(old);
+                    UpdateFiles.CopyDurable(target, old); hash = UpdateFiles.FileHash(old);
                     if (hash != UpdateFiles.FileHash(target)) throw new IOException("An application file changed while preparing the update.");
-                    using (FileStream check = new FileStream(old, FileMode.Open, FileAccess.ReadWrite, FileShare.Read)) check.Flush(true);
                 }
                 records.Add(new Dictionary<string, object> { { "path", relative }, { "existed", existed }, { "hash", hash } });
             }
             UpdateFiles.AtomicText(journal, UpdateFiles.Json(1024 * 1024).Serialize(new Dictionary<string, object> { { "root", root }, { "files", records } }));
+            FailureOutcome = "recovery-required";
             try
             {
                 if (progress != null) progress("Installing the verified app files. Your notebook folder and browser settings are kept.");
@@ -350,7 +442,14 @@ namespace ZNote.NativeHost
             }
             catch (Exception)
             {
-                try { Recover(); } catch (Exception recovery) { throw new IOException("The update was interrupted and needs recovery when Z Note is reopened. Your notebook and saved backup were not changed. " + recovery.Message); }
+                try
+                {
+                    // Match the durable record to the in-memory snapshot too;
+                    // missing/altered recovery metadata must never imply success.
+                    Recover(true, records);
+                    FailureOutcome = "rolled-back";
+                }
+                catch (Exception recovery) { throw new IOException("The update was interrupted and needs recovery when Z Note is reopened. Your notebook and saved backup were not changed. " + recovery.Message); }
                 throw;
             }
             try { CleanupPending(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
@@ -368,6 +467,7 @@ namespace ZNote.NativeHost
         private string partial, saved;
         private long expected, received;
         private bool installed;
+        private string installOutcome = "recovery-required";
         internal UpdateSession(string page, bool supported, Action<Dictionary<string, object>> sender, string testStateRoot = null)
         { root = Path.GetDirectoryName(Path.GetFullPath(page)); state = testStateRoot ?? UpdateFiles.StateRoot(root); send = sender; automatic = supported; }
         internal static Dictionary<string, object> Reply(string stage)
@@ -381,21 +481,27 @@ namespace ZNote.NativeHost
         }
         internal void Handle(string text)
         {
+            string command = null, requested = null;
             try
             {
                 IDictionary<string, object> data = UpdateFiles.Json(MaximumFrame).DeserializeObject(text) as IDictionary<string, object>;
                 if (data == null) throw new InvalidDataException("Invalid update message.");
                 if (!automatic) throw new InvalidOperationException("Automatic installation is disabled in this helper session. Open Z Note with Z Note.exe or Open Z Note.cmd.");
-                string command = UpdateFiles.Text(data, "command");
+                command = UpdateFiles.Text(data, "command");
                 if (command == "backup-begin") Begin(UpdateFiles.Integer(data, "bytes"));
                 else if (command == "backup-chunk") Chunk(UpdateFiles.Text(data, "data"));
                 else if (command == "backup-end") End();
-                else if (command == "install") Install(UpdateFiles.Text(data, "version"));
+                else if (command == "install") { requested = UpdateFiles.Text(data, "version"); Install(requested); }
                 else throw new InvalidDataException("Unknown update command.");
             }
             catch (Exception e)
             {
-                Dictionary<string, object> error = Reply("error"); error["message"] = e.Message; send(error);
+                Dictionary<string, object> error = Reply("error"); error["message"] = e.Message;
+                if (command == "install")
+                {
+                    error["outcome"] = installOutcome; error["version"] = requested; error["backupPath"] = saved ?? "";
+                }
+                send(error);
             }
         }
         private void Begin(long bytes)
@@ -433,12 +539,16 @@ namespace ZNote.NativeHost
         private void Progress(string message) { Dictionary<string, object> reply = Reply("progress"); reply["message"] = message; send(reply); }
         private void Install(string requested)
         {
+            installOutcome = "recovery-required";
             if (saved == null || !File.Exists(saved) || installed) throw new InvalidDataException("Save a complete notebook backup before installing an update.");
             if (String.Equals(Path.GetFullPath(Process.GetCurrentProcess().MainModule.FileName), UpdateFiles.Under(root, "app/native/ZNoteHost.exe"), StringComparison.OrdinalIgnoreCase)) throw new IOException("Reopen Z Note through Z Note.exe or Open Z Note.cmd before installing updates.");
             UpdateFiles.CompareVersions(requested, "0.0.0");
             using (UpdateLock updateLock = new UpdateLock(root))
             {
                 UpdateTransaction transaction = new UpdateTransaction(root, state); transaction.Recover();
+                // Only the exclusive lock and completed recovery establish a
+                // safe baseline. Earlier failures remain conservative.
+                installOutcome = "unchanged";
                 string current = File.ReadAllText(UpdateFiles.Under(root, "VERSION.txt")).Trim();
                 int order = UpdateFiles.CompareVersions(requested, current);
                 if (order == 0)
@@ -458,7 +568,9 @@ namespace ZNote.NativeHost
                 try
                 {
                     Progress("Downloading the update. Your current app and notebook are still available."); package.Download(zip);
-                    transaction.Apply(zip, package.Version, Progress, null); installed = true;
+                    try { transaction.Apply(zip, package.Version, Progress, null); }
+                    catch (Exception) { installOutcome = transaction.FailureOutcome; throw; }
+                    installed = true; installOutcome = "recovery-required";
                     Dictionary<string, object> reply = Reply("installed"); reply["version"] = package.Version; reply["backupPath"] = saved; send(reply);
                 }
                 finally
@@ -504,7 +616,7 @@ namespace ZNote.NativeHost
         {
             string root = Path.GetDirectoryName(Path.GetFullPath(page));
             string state = UpdateFiles.StateRoot(root);
-            if (!File.Exists(Path.Combine(state, "transaction.json"))) return;
+            if (!UpdateFiles.ReadAttributes(Path.Combine(state, "transaction.json")).HasValue) return;
             using (UpdateLock updateLock = new UpdateLock(root)) new UpdateTransaction(root, state).Recover();
         }
     }
