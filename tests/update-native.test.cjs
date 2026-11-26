@@ -311,6 +311,64 @@ test('exact already-current refusal after install is a known no-op without claim
   assert.equal(socket.sent.filter(x => x.command === 'install').length, 1);
 });
 
+test('matching terminal unchanged and rolled-back results allow notes to resume without claiming installation or replaying', async () => {
+  for (const outcome of ['unchanged', 'rolled-back']) {
+    const h = harness(), { socket, result } = await h.start();
+    const rejected = assert.rejects(result, e => e.safeToResume === true && e.outcome === outcome &&
+      e.uncertain === false && e.reopenRequired === false && e.alreadyCurrent === false);
+    socket.update('error', { message: 'Access to the update staging path is denied.', outcome, version: '2.4.1', backupPath: BACKUP_PATH });
+    await rejected;
+    assert.equal(h.bridge.state().installedVersion, '');
+    assert.equal(h.bridge.state().backupPath, BACKUP_PATH);
+    assert.equal(h.bridge.state().installAttempted, true);
+    assert.equal(h.bridge.state().busy, false);
+    assert.equal(socket.closed, true);
+    await assert.rejects(h.bridge.install(backup(), '2.4.1'), /already been started/);
+    await assert.rejects(h.bridge.connect(), /already been started/);
+    assert.equal(socket.sent.filter(x => x.command === 'install').length, 1);
+  }
+});
+
+test('unverified, mismatched, or recovery-required terminal errors remain uncertain', async () => {
+  for (const details of [
+    { outcome: 'unchanged', version: '2.4.2', backupPath: BACKUP_PATH },
+    { outcome: 'rolled-back', version: '2.4.1', backupPath: 'C:\\another-backup.json' },
+    { outcome: 'unchanged', version: '2.4.1' },
+    { outcome: 'rolled-back', backupPath: BACKUP_PATH },
+    { outcome: 'recovery-required', version: '2.4.1', backupPath: BACKUP_PATH },
+    { outcome: 'success', version: '2.4.1', backupPath: BACKUP_PATH },
+    { outcome: true, version: '2.4.1', backupPath: BACKUP_PATH },
+    {}
+  ]) {
+    const h = harness(), { socket, result } = await h.start();
+    const rejected = assert.rejects(result, e => e.safeToResume === false && e.uncertain === true && e.reopenRequired === true);
+    socket.update('error', { message: 'Access denied.', ...details });
+    await rejected;
+    assert.equal(h.bridge.state().installedVersion, '');
+    assert.equal(h.bridge.state().installAttempted, true);
+  }
+});
+
+test('safe outcome data outside an active install cannot establish a terminal install result', async () => {
+  const h = harness(), socket = await h.connect();
+  const result = h.bridge.install(backup(), '2.4.1');
+  const rejected = assert.rejects(result, e => e.safeToResume === false && e.outcome === '');
+  await turn();
+  assert.equal(socket.sent.at(-1).command, 'backup-begin');
+  socket.update('error', { message: 'Failed.', outcome: 'unchanged', version: '2.4.1', backupPath: BACKUP_PATH });
+  await rejected;
+  assert.equal(h.bridge.state().installedVersion, '');
+  assert.equal(h.bridge.state().installAttempted, false);
+});
+
+test('an explicit unverified outcome cannot use legacy already-current text to release the editor', async () => {
+  const h = harness(), { socket, result } = await h.start();
+  const rejected = assert.rejects(result, e => e.alreadyCurrent === false && e.safeToResume === false && e.uncertain === true);
+  socket.update('error', { message: 'This app is already current. Check for updates again.',
+    outcome: 'recovery-required', version: '2.4.1', backupPath: BACKUP_PATH });
+  await rejected;
+});
+
 test('already-current text outside an active install must not trigger installed-app recovery', async () => {
   const h = harness(), socket = await h.connect();
   const result = h.bridge.install(backup(), '2.4.1');

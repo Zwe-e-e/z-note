@@ -60,6 +60,24 @@ internal static class NativeUpdateTests
         };
     }
     private static string Json(object data) { return UpdateFiles.Json(1024 * 1024).Serialize(data); }
+    private static List<object> RecoverySnapshot(string root, string state, bool includeLauncher = true)
+    {
+        List<object> records = new List<object>();
+        foreach (string relative in UpdateFiles.Allowed)
+        {
+            if (relative == "Z Note.exe" && !includeLauncher) continue;
+            string target = UpdateFiles.Under(root, relative); bool existed = File.Exists(target); string hash = null;
+            if (existed)
+            {
+                string old = UpdateFiles.Under(state, "pending/old/" + relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(old)); UpdateFiles.CopyDurable(target, old); hash = UpdateFiles.FileHash(old);
+            }
+            records.Add(new Dictionary<string, object> { { "path", relative }, { "existed", existed }, { "hash", hash } });
+        }
+        return records;
+    }
+    private static void RecoveryJournal(string root, string state, List<object> records)
+    { File.WriteAllText(Path.Combine(state, "transaction.json"), Json(new Dictionary<string, object> { { "root", root }, { "files", records } })); }
     private static void VersionsAndRelease()
     {
         Check(UpdateFiles.CompareVersions("2.10.0", "2.9.99") > 0, "Numeric minor version comparison");
@@ -121,17 +139,16 @@ internal static class NativeUpdateTests
         root = App("2.3.0"); state = DirectoryFor("state"); transaction = new UpdateTransaction(root, state);
         File.Delete(Path.Combine(root, "app/js/update-native.js"));
         Reject(delegate { transaction.Apply(zip, "2.4.0", null, delegate(int index) { if (index == 7) throw new IOException("Injected replacement failure"); }); }, "Write failure propagates");
+        Check(transaction.FailureOutcome == "rolled-back", "Completed verified rollback has an explicit safe outcome");
         foreach (string relative in UpdateFiles.Allowed)
             if (relative != "app/js/update-native.js") Check(File.ReadAllText(UpdateFiles.Under(root, relative)) == FileText(relative, "2.3.0"), "Rollback restored " + relative);
         Check(!File.Exists(Path.Combine(root, "app/js/update-native.js")), "Rollback removes only a newly installed application file");
         Check(!File.Exists(Path.Combine(state, "transaction.json")), "Rollback completed");
         // Construct a recovery journal from an interrupted process without
         // deliberately terminating any process or touching the real app.
-        string previous = Path.Combine(state, "pending/old/VERSION.txt"); Directory.CreateDirectory(Path.GetDirectoryName(previous)); File.WriteAllText(previous, "2.3.0\n");
+        List<object> recovery = RecoverySnapshot(root, state);
         File.WriteAllText(Path.Combine(root, "VERSION.txt"), "2.4.0\n");
-        File.WriteAllText(Path.Combine(state, "transaction.json"), Json(new Dictionary<string, object> {
-            { "root", root }, { "files", new object[] { new Dictionary<string, object> { { "path", "VERSION.txt" }, { "existed", true }, { "hash", UpdateFiles.FileHash(previous) } } } }
-        }));
+        RecoveryJournal(root, state, recovery);
         new UpdateTransaction(root, state).Recover();
         Check(File.ReadAllText(Path.Combine(root, "VERSION.txt")) == "2.3.0\n", "Interrupted transaction rolls back on recovery");
         File.WriteAllText(Path.Combine(state, "transaction.json"), Json(new Dictionary<string, object> {
@@ -145,6 +162,139 @@ internal static class NativeUpdateTests
             Thread other = new Thread(delegate() { try { using (UpdateLock second = new UpdateLock(root)) { } } catch (IOException) { blocked = true; } });
             other.Start(); other.Join(); Check(blocked, "Concurrent installer rejected");
         }
+
+        root = App("2.3.0"); state = DirectoryFor("state"); transaction = new UpdateTransaction(root, state);
+        Reject(delegate {
+            transaction.Apply(zip, "2.4.0", null, delegate(int index) {
+                if (index == 0) { File.Delete(Path.Combine(state, "transaction.json")); throw new IOException("Injected lost recovery record"); }
+            });
+        }, "Missing journal after an application write cannot claim rollback success");
+        Check(transaction.FailureOutcome == "recovery-required", "Unprovable rollback keeps the browser protected");
+        Check(Directory.Exists(Path.Combine(state, "pending/old")), "Uncertain recovery preserves application backup files");
+    }
+    private static void PreparationFailures()
+    {
+        string fixture = DirectoryFor("readonly"), source = Path.Combine(fixture, "source.txt"), copy = Path.Combine(fixture, "copy.txt");
+        File.WriteAllText(source, "original application bytes"); File.SetAttributes(source, FileAttributes.ReadOnly);
+        try
+        {
+            UpdateFiles.CopyDurable(source, copy);
+            Check(File.ReadAllText(copy) == File.ReadAllText(source), "Durable staging copy preserves exact original bytes");
+            Check((File.GetAttributes(copy) & FileAttributes.ReadOnly) == 0, "Generated backup does not inherit source ReadOnly");
+            using (FileStream stream = new FileStream(copy, FileMode.Open, FileAccess.ReadWrite, FileShare.Read)) stream.Flush(true);
+            Check((File.GetAttributes(source) & FileAttributes.ReadOnly) != 0, "Copying never clears the original file's attributes");
+        }
+        finally { File.SetAttributes(source, FileAttributes.Normal); }
+
+        string root = App("2.6.0"), state = DirectoryFor("state"), zip = Package("2.6.1");
+        string legacyStaging = Path.Combine(state, "pending/old/legacy.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(legacyStaging)); File.WriteAllText(legacyStaging, "old generated copy"); File.SetAttributes(legacyStaging, FileAttributes.ReadOnly);
+        string protectedFile = Path.Combine(root, "app/js/store.js"); File.SetAttributes(protectedFile, FileAttributes.ReadOnly);
+        UpdateTransaction transaction = new UpdateTransaction(root, state);
+        string failure = null;
+        try
+        {
+            try { transaction.Apply(zip, "2.6.1", null, null); } catch (UnauthorizedAccessException e) { failure = e.Message; }
+            Check(failure != null && failure.Contains("read-only") && failure.Contains("writable local copy"), "Read-only app file gets an actionable preparation error");
+            Check(transaction.FailureOutcome == "unchanged", "Read-only preparation failure proves application files unchanged");
+            Check(!File.Exists(Path.Combine(state, "transaction.json")), "Preparation failure happens before journaling or application writes");
+            Check(!File.Exists(legacyStaging), "Old read-only staging copies are cleaned without changing app-file attributes");
+            Check((File.GetAttributes(protectedFile) & FileAttributes.ReadOnly) != 0, "App-file read-only protection stays in place");
+            foreach (string relative in UpdateFiles.Allowed) Check(File.ReadAllText(UpdateFiles.Under(root, relative)) == FileText(relative, "2.6.0"), "Preparation failure preserves application file " + relative);
+            Check(File.ReadAllText(Path.Combine(root, "Z Note notebook/pages/private.json")) == "private notebook content", "Preparation error preserves notebook data");
+        }
+        finally { File.SetAttributes(protectedFile, FileAttributes.Normal); }
+
+        state = DirectoryFor("invalidjournal"); Directory.CreateDirectory(Path.Combine(state, "transaction.json"));
+        Put(state, "pending/old/keep.txt", "recovery evidence"); transaction = new UpdateTransaction(root, state);
+        Reject(delegate { transaction.Apply(zip, "2.6.1", null, null); }, "A directory at the journal path cannot masquerade as a missing journal");
+        Check(transaction.FailureOutcome == "recovery-required", "Unverified recovery never claims unchanged files");
+        Check(File.ReadAllText(Path.Combine(state, "pending/old/keep.txt")) == "recovery evidence", "Invalid recovery state is retained for repair");
+
+        state = DirectoryFor("alreadyrestored");
+        RecoveryJournal(root, state, RecoverySnapshot(root, state));
+        protectedFile = Path.Combine(root, "VERSION.txt"); File.SetAttributes(protectedFile, FileAttributes.ReadOnly);
+        try
+        {
+            new UpdateTransaction(root, state).Recover();
+            Check(!File.Exists(Path.Combine(state, "transaction.json")), "Recovery completes when a read-only target already matches verified original bytes");
+            Check((File.GetAttributes(protectedFile) & FileAttributes.ReadOnly) != 0 && File.ReadAllText(protectedFile) == FileText("VERSION.txt", "2.6.0"), "Idempotent recovery preserves original bytes and read-only attribute");
+        }
+        finally { File.SetAttributes(protectedFile, FileAttributes.Normal); }
+    }
+    private static void FailureStateTransactions()
+    {
+        string zip = Package("2.6.1");
+        // New-file installation exercises the real journal and recovery path
+        // independently of OS-specific File.Replace metadata restrictions.
+        string root = DirectoryFor("emptyapp"), state = DirectoryFor("state");
+        Put(root, "Z Note notebook/pages/private.json", "private notebook content");
+        UpdateTransaction transaction = new UpdateTransaction(root, state);
+        Reject(delegate { transaction.Apply(zip, "2.6.1", null, delegate(int index) { if (index == 0) throw new IOException("Injected failure after first new app file"); }); }, "New-file installation failure returns after rollback");
+        Check(transaction.FailureOutcome == "rolled-back", "Actual verified new-file rollback returns the safe rolled-back outcome");
+        foreach (string relative in UpdateFiles.Allowed) Check(!File.Exists(UpdateFiles.Under(root, relative)), "Rollback removes only newly installed application file " + relative);
+        Check(File.ReadAllText(Path.Combine(root, "Z Note notebook/pages/private.json")) == "private notebook content", "New-file rollback preserves existing notebook content");
+        Check(!File.Exists(Path.Combine(state, "transaction.json")), "Verified rollback removes its journal");
+        foreach (bool missing in new bool[] { true, false })
+        {
+            root = DirectoryFor("emptyapp"); state = DirectoryFor("state"); transaction = new UpdateTransaction(root, state);
+            Reject(delegate {
+                transaction.Apply(zip, "2.6.1", null, delegate(int index) {
+                    if (index != 0) return;
+                    if (missing) File.Delete(Path.Combine(state, "transaction.json"));
+                    else File.WriteAllText(Path.Combine(state, "transaction.json"), Json(new Dictionary<string, object> { { "root", root }, { "files", new object[0] } }));
+                    throw new IOException("Injected unavailable recovery proof");
+                });
+            }, "Missing or altered journal cannot establish rollback success");
+            Check(transaction.FailureOutcome == "recovery-required", "Lost rollback proof keeps a conservative outcome");
+            Check(Directory.Exists(Path.Combine(state, "pending/new")), "Uncertain rollback preserves staging evidence");
+        }
+    }
+    private static void InvalidRecoveryRecords()
+    {
+        foreach (string kind in new string[] { "empty", "subset", "duplicate", "bad-hash", "wrong-hash", "bad-type", "false-with-hash", "missing-hash" })
+        {
+            string root = App("2.6.0"), state = DirectoryFor("invalidrecovery");
+            List<object> records = RecoverySnapshot(root, state);
+            Dictionary<string, object> last = (Dictionary<string, object>)records[records.Count - 1];
+            if (kind == "empty") records.Clear();
+            else if (kind == "subset") records.RemoveAt(0);
+            else if (kind == "duplicate") records[1] = records[0];
+            else if (kind == "bad-hash") last["hash"] = new string('A', 64);
+            else if (kind == "wrong-hash") last["hash"] = new string('0', 64);
+            else if (kind == "bad-type") last["existed"] = "true";
+            else if (kind == "false-with-hash") last["existed"] = false;
+            else if (kind == "missing-hash") last.Remove("hash");
+            // A real interrupted update can leave changed files. Invalid
+            // metadata must not restore even an earlier valid entry.
+            Put(root, "VERSION.txt", "2.6.1\n"); Put(root, "app/js/store.js", "interrupted replacement");
+            Dictionary<string, string> before = new Dictionary<string, string>();
+            foreach (string relative in UpdateFiles.Allowed) before[relative] = UpdateFiles.FileHash(UpdateFiles.Under(root, relative));
+            RecoveryJournal(root, state, records);
+            string journalText = File.ReadAllText(Path.Combine(state, "transaction.json"));
+            UpdateTransaction transaction = new UpdateTransaction(root, state);
+            Reject(delegate { transaction.Recover(); }, kind + " recovery record rejected before rollback writes");
+            Check(transaction.FailureOutcome == "recovery-required", kind + " recovery record retains the conservative outcome");
+            foreach (string relative in UpdateFiles.Allowed) Check(UpdateFiles.FileHash(UpdateFiles.Under(root, relative)) == before[relative], kind + " recovery error does not mutate " + relative);
+            Check(File.ReadAllText(Path.Combine(state, "transaction.json")) == journalText, kind + " recovery journal is preserved");
+            Check(Directory.Exists(Path.Combine(state, "pending/old")), kind + " recovery backups are preserved");
+            List<Dictionary<string, object>> replies = new List<Dictionary<string, object>>();
+            byte[] data = Encoding.UTF8.GetBytes("{\"app\":\"znote\",\"version\":1,\"pages\":[],\"images\":[],\"settings\":{}}");
+            using (UpdateSession session = new UpdateSession(Path.Combine(root, "Z Note.html"), true, delegate(Dictionary<string, object> reply) { replies.Add(reply); }, state))
+            {
+                session.Handle(Json(new Dictionary<string, object> { { "command", "backup-begin" }, { "bytes", data.Length } }));
+                session.Handle(Json(new Dictionary<string, object> { { "command", "backup-chunk" }, { "data", Convert.ToBase64String(data) } }));
+                session.Handle("{\"command\":\"backup-end\"}");
+                session.Handle("{\"command\":\"install\",\"version\":\"2.6.1\"}");
+                Check((string)replies[replies.Count - 1]["stage"] == "error" && (string)replies[replies.Count - 1]["outcome"] == "recovery-required", kind + " startup recovery cannot unlock editing or acknowledge an installed version");
+                Check(File.ReadAllText(Path.Combine(state, "transaction.json")) == journalText, kind + " session error keeps recovery evidence");
+            }
+        }
+        string legacyRoot = App("2.6.0"), legacyState = DirectoryFor("legacyrecovery");
+        RecoveryJournal(legacyRoot, legacyState, RecoverySnapshot(legacyRoot, legacyState, false));
+        new UpdateTransaction(legacyRoot, legacyState).Recover();
+        Check(!File.Exists(Path.Combine(legacyState, "transaction.json")), "Complete 37-file legacy journal remains compatible");
+        Check(File.ReadAllText(Path.Combine(legacyRoot, "Z Note.exe")) == FileText("Z Note.exe", "2.6.0"), "Legacy recovery leaves the optional launcher unchanged");
     }
     private static void LauncherTransactions()
     {
@@ -180,10 +330,9 @@ internal static class NativeUpdateTests
 
         // An interrupted transaction can include a newly added icon launcher.
         root = App("2.4.2", false); state = DirectoryFor("state");
+        List<object> recovery = RecoverySnapshot(root, state);
         Put(root, "Z Note.exe", FileText("Z Note.exe", "3.0.0"));
-        File.WriteAllText(Path.Combine(state, "transaction.json"), Json(new Dictionary<string, object> {
-            { "root", root }, { "files", new object[] { new Dictionary<string, object> { { "path", "Z Note.exe" }, { "existed", false } } } }
-        }));
+        RecoveryJournal(root, state, recovery);
         new UpdateTransaction(root, state).Recover();
         Check(!File.Exists(Path.Combine(root, "Z Note.exe")), "Interrupted launcher installation recovers on reopen");
         Check(File.ReadAllText(Path.Combine(root, "Z Note notebook/pages/private.json")) == "private notebook content", "Launcher recovery leaves notebook untouched");
@@ -251,13 +400,9 @@ internal static class NativeUpdateTests
                 Check((string)replies[replies.Count - 1]["stage"] == "error", "Already-installed acknowledgement cannot bypass another installer's lock");
             }
             // Recovery must complete before an equal version can be confirmed.
-            string previous = Path.Combine(state, "pending/old/app/js/store.js");
-            Directory.CreateDirectory(Path.GetDirectoryName(previous));
-            File.WriteAllText(previous, FileText("app/js/store.js", "2.6.0"));
+            List<object> recovery = RecoverySnapshot(root, state);
             Put(root, "app/js/store.js", "interrupted replacement");
-            File.WriteAllText(Path.Combine(state, "transaction.json"), Json(new Dictionary<string, object> {
-                { "root", root }, { "files", new object[] { new Dictionary<string, object> { { "path", "app/js/store.js" }, { "existed", true }, { "hash", UpdateFiles.FileHash(previous) } } } }
-            }));
+            RecoveryJournal(root, state, recovery);
             int before = replies.Count;
             session.Handle("{\"command\":\"install\",\"version\":\"2.6.0\"}");
             Dictionary<string, object> result = replies[replies.Count - 1];
@@ -273,12 +418,46 @@ internal static class NativeUpdateTests
             Check((string)replies[replies.Count - 1]["stage"] == "error", "A completed session cannot replay installation");
         }
     }
-    private static int Main()
+    private static void FailureOutcomesProtocol()
+    {
+        string root = App("2.6.0"), state = DirectoryFor("state");
+        List<Dictionary<string, object>> replies = new List<Dictionary<string, object>>();
+        Action<Dictionary<string, object>> send = delegate(Dictionary<string, object> value) { replies.Add(value); };
+        byte[] data = Encoding.UTF8.GetBytes("{\"app\":\"znote\",\"version\":1,\"pages\":[],\"images\":[],\"settings\":{}}");
+        using (UpdateSession session = new UpdateSession(Path.Combine(root, "Z Note.html"), true, send, state))
+        {
+            session.Handle("{\"command\":\"install\",\"version\":\"2.5.1\"}");
+            Check((string)replies[replies.Count - 1]["outcome"] == "recovery-required", "Failure before backup and lock cannot claim a safe baseline");
+            session.Handle(Json(new Dictionary<string, object> { { "command", "backup-begin" }, { "bytes", data.Length } }));
+            session.Handle(Json(new Dictionary<string, object> { { "command", "backup-chunk" }, { "data", Convert.ToBase64String(data) } }));
+            session.Handle("{\"command\":\"backup-end\"}");
+            string saved = (string)replies[replies.Count - 1]["backupPath"];
+            session.Handle("{\"command\":\"install\",\"version\":\"2.5.1\"}");
+            Dictionary<string, object> failure = replies[replies.Count - 1];
+            Check((string)failure["stage"] == "error" && (string)failure["outcome"] == "unchanged", "Rejected downgrade after locked recovery reports unchanged application files");
+            Check((string)failure["version"] == "2.5.1" && (string)failure["backupPath"] == saved, "Safe outcome is bound to the exact request and validated backup");
+            using (UpdateLock held = new UpdateLock(root))
+            {
+                Thread other = new Thread(delegate() { session.Handle("{\"command\":\"install\",\"version\":\"2.5.1\"}"); });
+                other.Start(); other.Join();
+                Check((string)replies[replies.Count - 1]["outcome"] == "recovery-required", "Concurrent updater rejection cannot reuse an earlier safe outcome");
+            }
+            Directory.CreateDirectory(Path.Combine(state, "transaction.json"));
+            session.Handle("{\"command\":\"install\",\"version\":\"2.6.0\"}");
+            Check((string)replies[replies.Count - 1]["outcome"] == "recovery-required", "Invalid recovery record cannot acknowledge the current version or release editing");
+            Check(File.ReadAllText(saved) == Encoding.UTF8.GetString(data), "Every failure keeps the completed notebook recovery backup");
+            Check(Directory.GetFiles(state, "package-*.zip").Length == 0, "Outcome checks use no download or application mutation");
+        }
+    }
+    private static int Main(string[] args)
     {
         testRoot = Path.Combine(Path.GetTempPath(), "znu-" + Guid.NewGuid().ToString("N").Substring(0, 8)); Directory.CreateDirectory(testRoot);
         try
         {
-            VersionsAndRelease(); Archives(); Transactions(); LauncherTransactions(); BackupProtocol(); AlreadyInstalledProtocol();
+            bool focused = args.Length == 1 && args[0] == "--preparation-and-outcomes";
+            if (args.Length > 0 && !focused) throw new ArgumentException("Unknown native updater test group.");
+            VersionsAndRelease(); Archives(); PreparationFailures(); FailureStateTransactions(); InvalidRecoveryRecords(); BackupProtocol(); FailureOutcomesProtocol();
+            if (!focused) { Transactions(); LauncherTransactions(); AlreadyInstalledProtocol(); }
             Console.WriteLine(assertions + " native updater assertions passed (temporary fixtures only; no network or real app updates)."); return 0;
         }
         catch (Exception e) { Console.Error.WriteLine(e); return 1; }

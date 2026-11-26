@@ -645,6 +645,37 @@ test('an uncertain install keeps editing and sync paused and cannot be replayed'
   }
 });
 
+test('a confirmed unchanged or rolled-back install can close the dialog and return safely to notes', async () => {
+  for (const outcome of ['unchanged', 'rolled-back']) {
+    const failure = Object.assign(new Error('Access to the update staging path is denied.'),
+      { safeToResume: true, outcome, uncertain: false, reopenRequired: false });
+    const t = nativeHarness({ install: async () => { throw failure; } });
+    t.nativeState.backupPath = 'C:\\Z Note\\Backups\\recovery.json';
+    await t.updates.installAutomatically({ version: '2.4.0' });
+    const modal = t.modals[0].el;
+    assert.match(status(modal), outcome === 'unchanged' ? /stopped before changing the app/ : /previous app was restored/);
+    assert.match(status(modal), /Access to the update staging path is denied/);
+    assert.doesNotMatch(status(modal), /result could not be confirmed|Installed v/);
+    assert.match(modal.textContent, /C:\\Z Note\\Backups\\recovery.json/);
+    assert.match(modal.textContent, /Source folder → Open existing notebook/);
+    assert.match(modal.textContent, /full path may be different on each PC/);
+    assert.equal(t.app.inert, false);
+    assert.equal(t.priorModal.inert, true);
+    assert.equal(t.events.filter(event => event === 'resume').length, 1);
+    assert.equal(t.listeners.get('beforeunload').size, 0);
+    assert.equal(t.listeners.get('keydown').size, 0);
+    assert.equal(t.reloads, 0);
+    assert.equal(t.closes, 0);
+    button(modal, 'Back to my notes').onclick();
+    assert.equal(t.modals[0].closed, true);
+    assert.equal(t.app.inert, false);
+    assert.equal(t.nativeCalls.length, 1);
+    const pane = t.updates.pane();
+    await button(pane, 'Check for updates').onclick();
+    assert.equal(button(pane, 'Install update automatically').disabled, true, 'A stopped installation is not replayable in this window');
+  }
+});
+
 test('a final save failure keeps the installed app frozen until saving and reload can be retried', async () => {
   let checkpoints = 0;
   const t = nativeHarness({ checkpoint: async () => {
