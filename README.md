@@ -1,8 +1,10 @@
 # Z Note
 
-**Current release: [v2.6.2](https://github.com/Zwe-e-e/z-note/releases/tag/v2.6.2)** · Released 26 November 2026 · [Release history](CHANGELOG.md)
+**Current release: [v2.6.3](https://github.com/Zwe-e-e/z-note/releases/tag/v2.6.3)** · Released 26 November 2026 · [Release history](CHANGELOG.md)
 
-**New in v2.6.2:** Return to notes after an update is confirmed unchanged or successfully rolled back; clearer handling of read-only application files; stricter recovery checks; a **Locate notebook on this PC…** button for different OneDrive locations; and finer Ctrl/Command + wheel board zoom, about 5% per mouse-wheel step instead of 18%.
+**New in v2.6.3:** The Windows icon launcher locates the app beside the actual running **Z Note.exe**, shows the full paths when opening fails, and distinguishes missing files from access errors. If only the Windows helper is missing, it explains the unavailable native features and opens the same page in browser mode. Both the full portable download and automatic update include this updated launcher. Notes, browser storage and this PC's source-folder settings are unchanged.
+
+**Included since v2.6.2:** Return to notes after an update is confirmed unchanged or successfully rolled back; clearer handling of read-only application files; stricter recovery checks; a **Locate notebook on this PC…** button for different OneDrive locations; and finer Ctrl/Command + wheel board zoom, about 5% per mouse-wheel step instead of 18%.
 
 **Included since v2.6.1:** Weekly, monthly, yearly and custom project expense periods; category suggestions from saved expenses; full source-folder paths and copyable sync instructions; and recovery actions for a stuck automatic-update dialog. Existing notes, receipts, monthly budgets and source-folder settings are preserved.
 
@@ -16,11 +18,11 @@ Your installed version appears at the bottom of the app sidebar and in the **Sty
 
 A portable notebook you download to your PC and open in your own browser. Notes, tasks, boards, screen snips, themes, local folder saving and Keep Awake are included.
 
-**[Download page](https://zwe-e-e.github.io/z-note/)** · **[Download Z Note v2.6.2 Portable ZIP](https://zwe-e-e.github.io/z-note/downloads/Z-Note-v2.6.2-With-Icon.zip)**
+**[Download page](https://zwe-e-e.github.io/z-note/)** · **[Download Z Note v2.6.3 Portable ZIP](https://zwe-e-e.github.io/z-note/downloads/Z-Note-v2.6.3-With-Icon.zip)**
 
 ## Download and start
 
-1. Download **Z-Note-v2.6.2-With-Icon.zip** and choose **Extract All**. Do not run the app from inside the ZIP.
+1. Download **Z-Note-v2.6.3-With-Icon.zip** and choose **Extract All**. Do not run the app from inside the ZIP.
 2. Save the extracted **Z Note** folder wherever you want on your PC.
 3. On Windows, double-click **Z Note.exe** (the blue Z icon). It opens your own Chrome or Edge browser in a dedicated window and enables background Keep Awake and automatic app updates. **Open Z Note.cmd** remains an alternative. You can also open **Z Note.html** directly, with visible-window Keep Awake and manual app updates.
 4. In the first-run dialog, click **Choose source folder** and select that extracted **Z Note** folder. Allow the browser to save files. The app creates a **Z Note notebook** subfolder for your pages and pictures. To reconnect notes from another PC, use **Open existing notebook…** and select **Z Note notebook** itself or its parent folder.
@@ -40,6 +42,8 @@ Z Note/
 Each person gets their own notebook. The shared download contains application files and generic starter examples only.
 
 Keep **Z Note.exe**, **Z Note.html** and the **app** folder together. The icon launcher finds the app beside itself, so the whole folder can move to another drive or PC. To add a desktop icon on that PC, right-click **Z Note.exe** and choose **Show more options → Send to → Desktop (create shortcut)**. A desktop shortcut belongs to that PC; the portable ZIP uses the launcher itself.
+
+**If the Z icon does not open:** try **Open Z Note.cmd** in that same extracted folder. Keep the exact error message and the full application, page and helper paths shown by v2.6.3. Both launchers can open browser mode when `app/native/ZNoteHost.exe` is missing; that mode has no background Keep Awake or automatic update installation. A working CMD launch therefore does not by itself confirm that the helper is present. The v2.6.3 icon launcher reports access errors, invalid helper files and helper startup failures rather than silently switching modes. Keep using the same app location and browser profile to retain your notes and connected-folder settings.
 
 ## Budget & expenses
 
@@ -92,9 +96,11 @@ Click **Check for updates** in the sidebar, or open **Style & data → Updates**
 3. Copy the application files from its **Z Note** folder into your original **Z Note** app folder, replacing matching program files. Keep **Z Note notebook** and all backups. Do not delete the original folder.
 4. Reopen through your existing shortcut or **Open Z Note.cmd**, using the same location and browser profile. Check that your notes and source-folder settings are present.
 
-This migration ZIP keeps the existing launcher. For a new installation with the blue **Z Note.exe** icon and current features, use the full [v2.6.2 portable download](https://zwe-e-e.github.io/z-note/downloads/Z-Note-v2.6.2-With-Icon.zip). Use the [new download page](https://zwe-e-e.github.io/z-note/); the old GitHub Pages address does not redirect.
+This migration ZIP keeps the existing launcher. For a new installation with the blue **Z Note.exe** icon and current features, use the full [v2.6.3 portable download](https://zwe-e-e.github.io/z-note/downloads/Z-Note-v2.6.3-With-Icon.zip). Use the [new download page](https://zwe-e-e.github.io/z-note/); the old GitHub Pages address does not redirect.
 
 **From v2.5.0 onward**, open **Z Note.exe** or **Open Z Note.cmd** on Windows and use **Check for updates → Install update automatically** for later releases from the new repository. Close other Z Note windows and keep this window open while it works. Z Note saves a recovery backup, shows its path, verifies the download, updates application files in place, and reloads. Your notes, pictures, source-folder connection and display settings stay in place.
+
+The **v2.6.3 automatic update also replaces Z Note.exe with the updated icon launcher**. It uses the same complete application files as the full portable download. If you open the HTML directly, save a backup and use the manual copy steps above with the full v2.6.3 ZIP, keeping the original app location, notebook and backups.
 
 Automatic installation requires working browser storage and the Windows launcher. If the result cannot be confirmed, follow the instruction to close and reopen the launcher so recovery can finish. Keep the recovery backup until you have checked your notebook. The manual copy steps above also remain available when opening the HTML directly or when the launcher cannot connect.
 
@@ -102,7 +108,7 @@ In v2.6.1, if the files are already updated while an older app window is still o
 
 In v2.6.2, **Back to my notes** is available after the helper confirms that an update left the app unchanged or successfully restored the previous files. If the result remains uncertain, editing and folder sync stay paused and **Close Z Note** allows recovery on reopening. Read-only app files are detected before installation begins; Z Note preserves their protection and asks you to use a writable app copy. Recovery records and original files are verified before restoring them.
 
-**If an older window (including v2.6.0) is already stuck after an update error:** close it with the Windows title-bar **X** or **Alt+F4**, then reopen the same **Z Note.exe** once to let recovery run. The loaded older code cannot gain the new buttons until the updated app opens. If it opens, save a fresh JSON backup. If recovery still fails, keep the automatic JSON backup at the path shown in the error and preserve the old app and notebook folders. Do not delete its update recovery files or overwrite a partly recovered app. Extract the new full ZIP into a separate writable folder, open it, restore the most recent backup through **Restore from a file… → Add to my notebook**, and check your notes and attachments. Then use **Open existing notebook…** to select this PC's copy of the shared notebook, allowing access and choosing **Combine both** if prompted. Wait for OneDrive to finish before syncing. A new app location may have separate browser storage and needs its own folder permission.
+**If an older window (including v2.6.0) is already stuck after an update error:** close it with the Windows title-bar **X** or **Alt+F4**, then reopen the same **Z Note.exe** once to let recovery run. If the icon cannot open, try **Open Z Note.cmd** from that same app folder and keep the exact error, including any full paths. The loaded older code cannot gain the new buttons until the updated app opens. If it opens, save a fresh JSON backup. If recovery still fails, preserve the automatic JSON backup, recovery files and original app and notebook folders for diagnosis. Do not clear browser data or overwrite a partly recovered app. Opening a separate app copy requires restoring a backup and reconnecting the source folder; it does not automatically retain the original browser settings.
 
 Keeping the same app location and browser profile retains browser notes and folder settings. If you choose a new app location or another PC, use **Open existing notebook…** to reconnect **Z Note notebook** or its parent. For notes kept only in browser storage, restore the saved JSON backup through **Restore from a file… → Add to my notebook**. Browser storage and folder permissions do not travel with a copied application folder.
 
@@ -161,12 +167,13 @@ powershell -NoProfile -File tests/test-native.ps1
 powershell -NoProfile -File tests/test-native-update.ps1
 node --test tests/native-awake.test.cjs
 powershell -NoProfile -File scripts/package-portable.ps1
-powershell -NoProfile -File scripts/package-portable.ps1 -LegacyUpdater
+powershell -NoProfile -File scripts/package-portable.ps1 -UpdateAsset
 powershell -NoProfile -File tests/test-package.ps1
 ```
 
 The packaging script includes only the app, launcher and quick guide, and verifies the archive contents. Personal notebooks, exported backups and credentials must never be published. `.gitignore` excludes standard notebook and backup paths; only the curated portable ZIP is allowed.
 
-For v2.6.2, build the full 38-file `downloads/Z-Note-Portable.zip`, then publish an identical versioned copy as `downloads/Z-Note-v2.6.2-With-Icon.zip` for the download page. `-LegacyUpdater` builds the 37-file `downloads/Z-Note-v2.6.2-Portable.zip` for existing automatic updaters; it preserves the installed launcher. Attach both versioned ZIPs and their `SHA256SUMS` file to the GitHub release. The helper includes the v2.6.2 update-recovery fixes, and the full download includes a launcher with the current version. Keep the earlier v2.5.0 migration release available for installed v2.4.2 and older clients, which cannot automatically follow the repository-owner change.
+For v2.6.3, build the full 38-file `downloads/Z-Note-Portable.zip`, then publish an identical versioned copy as `downloads/Z-Note-v2.6.3-With-Icon.zip` for the download page. `-UpdateAsset` builds the same 38-file package as `downloads/Z-Note-v2.6.3-Portable.zip` for automatic updates. Verify that all three archives have identical bytes and attach both versioned ZIPs and their `SHA256SUMS` file to the GitHub release. Existing v2.5.0 and later helpers accept the launcher file, so automatic installation updates it too. Retain `-LegacyUpdater` only for explicitly required older-format packaging, and keep the earlier v2.5.0 migration asset available for installed v2.4.2 and older clients, which cannot automatically follow the repository-owner change.
 
 GitHub Pages publishes the `main` branch, repository root. Rebuild the ZIP whenever application files change so the download matches the source.
+

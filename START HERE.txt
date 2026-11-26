@@ -1,7 +1,26 @@
 Z NOTE - PORTABLE BROWSER APP
-Version 2.6.2 - released 26 November 2026
+Version 2.6.3 - released 26 November 2026
 Check your installed version at the bottom of the sidebar or in Style & data.
 Use "Check for updates" in the sidebar or Style & data > Updates.
+
+NEW IN 2.6.3
+The icon launcher locates the app beside the actual running Z Note.exe.
+Opening errors now identify missing files and access problems, with the full
+application, page and Windows-helper paths. If only the helper is missing,
+the launcher explains that background Keep Awake and automatic installation
+are unavailable, then opens the same local page in browser mode. A present
+helper still follows the normal startup route; startup and access errors do
+not silently switch modes. Both the full portable ZIP and v2.6.3 automatic
+update include this updated icon launcher. Notes, browser storage and this
+PC's source-folder settings are kept.
+
+IF THE Z ICON DOES NOT OPEN
+Try Open Z Note.cmd from the same extracted app folder. Keep the exact error
+message and full paths for diagnosis. CMD can also open browser mode when the
+helper is missing, so opening through CMD alone does not confirm the helper
+is working. Keep using the same app location and browser profile for your notes.
+The reported failure on another PC could not be reproduced; v2.6.3 improves
+path resolution and diagnostics but does not bypass Windows access restrictions.
 
 NEW IN 2.6.2
 Failed updates offer Back to my notes when the helper confirms the app was not
@@ -17,18 +36,15 @@ of 18%, with gentler trackpad zoom and smooth movement through 100%.
 
 IF AN OLDER UPDATE WINDOW IS ALREADY STUCK
 After an error appears, use the Windows title-bar X or Alt+F4 to close it, then
-reopen the same Z Note.exe once for recovery. An older open window cannot gain
-the new recovery buttons until it loads the updated application.
+reopen the same Z Note.exe once for recovery. If the icon cannot open, try
+Open Z Note.cmd from that same app folder and keep the exact error and paths.
+An older open window cannot gain the new recovery buttons until it loads the
+updated application.
 If it opens, save a fresh backup from Style & data > Sync & backup. If recovery
 still fails, retain the automatic JSON backup shown in the error and preserve
-the old app and notebook folders. Do not delete update recovery files or
-overwrite a partly recovered app. Extract the full new ZIP into a separate
-writable folder, open Z Note.exe, and restore the latest JSON backup through
-Restore from a file > Add to my notebook. Check your notes and attachments.
-Then choose Open existing notebook and select this PC's copy of the shared
-notebook. Allow access and choose Combine both if asked. Wait for OneDrive to
-finish downloading before syncing. A new app location can have separate
-browser storage and needs its own folder permission.
+the old app and notebook folders for diagnosis. Do not delete update recovery
+files, clear browser data, or overwrite a partly recovered app. A new app
+location can have separate browser storage and needs its own folder permission.
 
 NEW IN 2.6.1
 The expense Category dropdown includes categories already used on your expense
@@ -199,6 +215,11 @@ can use "Check for updates" > "Install update automatically". Close other
 Z Note windows and keep this window open while it works. Z Note saves a recovery
 backup, shows its path, verifies the download and updates the application files
 in place. Notes, pictures, source-folder settings and display settings are kept.
+
+The v2.6.3 automatic update also installs the updated Z Note.exe icon launcher.
+It contains the same complete application files as the full portable download.
+For direct HTML use, save a backup and use the manual copy steps above with
+the full v2.6.3 ZIP, keeping the original app location, notebook and backups.
 
 Keep the recovery backup until you have checked your notes. If the update
 result cannot be confirmed, follow the instruction to close and reopen the

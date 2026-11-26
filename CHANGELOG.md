@@ -1,5 +1,14 @@
 # Z Note release history
 
+## v2.6.3 — 2026-11-26
+
+- Resolve the portable app beside the actual running **Z Note.exe**, independently of a shortcut's working directory.
+- Show specific missing-page, missing-helper and access errors, including the full application, page and Windows-helper paths. Detect files occupying required folder paths instead of treating them as a missing helper.
+- If the page exists and only the helper is genuinely missing, explain that background Keep Awake and automatic installation are unavailable, then open the same local page in browser mode. Preserve the normal helper route when it is present; access, invalid-file and helper startup errors do not trigger this fallback.
+- Include the updated icon launcher in both the full portable download and automatic-update package. Existing v2.5.0 and later helpers can install the complete package, including **Z Note.exe**. Keep notes, browser storage, notebook files and this PC's source-folder metadata unchanged.
+
+The reported launcher failure on another PC could not be reproduced. This release improves path resolution and diagnostics; it does not claim to resolve every Windows permission or extraction problem. If the icon still cannot open, try **Open Z Note.cmd** from the same app folder and retain the exact error and full paths.
+
 ## v2.6.2 — 2026-11-26
 
 - Let failed automatic updates return to notes when the Windows helper confirms that application files were unchanged or successfully rolled back. Keep recovery protection and a close action when the result is uncertain.
