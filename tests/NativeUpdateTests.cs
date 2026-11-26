@@ -224,12 +224,61 @@ internal static class NativeUpdateTests
             Check((string)replies[replies.Count - 1]["stage"] == "error" && !Directory.Exists(Path.Combine(state, "backups")), "Disabled helper writes no notebook backup and does not install");
         }
     }
+    private static void AlreadyInstalledProtocol()
+    {
+        string root = App("2.6.0"), state = DirectoryFor("state");
+        List<Dictionary<string, object>> replies = new List<Dictionary<string, object>>();
+        Action<Dictionary<string, object>> send = delegate(Dictionary<string, object> value) { replies.Add(value); };
+        byte[] data = Encoding.UTF8.GetBytes("{\"app\":\"znote\",\"version\":1,\"pages\":[],\"images\":[],\"settings\":{}}");
+        Dictionary<string, string> original = new Dictionary<string, string>();
+        foreach (string relative in UpdateFiles.Allowed) original[relative] = UpdateFiles.FileHash(UpdateFiles.Under(root, relative));
+        using (UpdateSession session = new UpdateSession(Path.Combine(root, "Z Note.html"), true, send, state))
+        {
+            session.Handle("{\"command\":\"install\",\"version\":\"2.6.0\"}");
+            Check((string)replies[replies.Count - 1]["stage"] == "error", "Already-installed acknowledgement still requires a complete backup");
+            session.Handle(Json(new Dictionary<string, object> { { "command", "backup-begin" }, { "bytes", data.Length } }));
+            session.Handle(Json(new Dictionary<string, object> { { "command", "backup-chunk" }, { "data", Convert.ToBase64String(data) } }));
+            session.Handle("{\"command\":\"backup-end\"}");
+            string backupPath = (string)replies[replies.Count - 1]["backupPath"];
+            session.Handle("{\"command\":\"install\",\"version\":\"v2.6.0\"}");
+            Check((string)replies[replies.Count - 1]["stage"] == "error", "Already-installed acknowledgement rejects malformed requested versions");
+            session.Handle("{\"command\":\"install\",\"version\":\"2.5.1\"}");
+            Check((string)replies[replies.Count - 1]["stage"] == "error", "Requested downgrade is rejected locally without a download");
+            using (UpdateLock held = new UpdateLock(root))
+            {
+                Thread other = new Thread(delegate() { session.Handle("{\"command\":\"install\",\"version\":\"2.6.0\"}"); });
+                other.Start(); other.Join();
+                Check((string)replies[replies.Count - 1]["stage"] == "error", "Already-installed acknowledgement cannot bypass another installer's lock");
+            }
+            // Recovery must complete before an equal version can be confirmed.
+            string previous = Path.Combine(state, "pending/old/app/js/store.js");
+            Directory.CreateDirectory(Path.GetDirectoryName(previous));
+            File.WriteAllText(previous, FileText("app/js/store.js", "2.6.0"));
+            Put(root, "app/js/store.js", "interrupted replacement");
+            File.WriteAllText(Path.Combine(state, "transaction.json"), Json(new Dictionary<string, object> {
+                { "root", root }, { "files", new object[] { new Dictionary<string, object> { { "path", "app/js/store.js" }, { "existed", true }, { "hash", UpdateFiles.FileHash(previous) } } } }
+            }));
+            int before = replies.Count;
+            session.Handle("{\"command\":\"install\",\"version\":\"2.6.0\"}");
+            Dictionary<string, object> result = replies[replies.Count - 1];
+            Check(replies.Count == before + 1 && (string)result["stage"] == "installed", "Already-installed version confirms completion without fetch or download progress");
+            Check((int)result["protocol"] == 1 && (string)result["version"] == "2.6.0" && (string)result["backupPath"] == backupPath, "Existing clients receive their expected installed version and recovery backup path");
+            Check(!File.Exists(Path.Combine(state, "transaction.json")), "Recovery finishes before the installed reply");
+            foreach (string relative in UpdateFiles.Allowed) Check(UpdateFiles.FileHash(UpdateFiles.Under(root, relative)) == original[relative], "Already-installed request preserves recovered application bytes: " + relative);
+            Check(File.ReadAllText(backupPath) == Encoding.UTF8.GetString(data), "Already-installed request keeps the complete recovery backup");
+            Check(File.ReadAllText(Path.Combine(root, "Z Note notebook/pages/private.json")) == "private notebook content", "Already-installed request preserves notebook bytes");
+            Check(File.ReadAllText(Path.Combine(root, "Z Note backup KEEP.json")) == "private backup content", "Already-installed request preserves older personal backups");
+            Check(Directory.GetFiles(state, "package-*.zip").Length == 0, "Already-installed request does not download a package");
+            session.Handle("{\"command\":\"install\",\"version\":\"2.6.0\"}");
+            Check((string)replies[replies.Count - 1]["stage"] == "error", "A completed session cannot replay installation");
+        }
+    }
     private static int Main()
     {
         testRoot = Path.Combine(Path.GetTempPath(), "znu-" + Guid.NewGuid().ToString("N").Substring(0, 8)); Directory.CreateDirectory(testRoot);
         try
         {
-            VersionsAndRelease(); Archives(); Transactions(); LauncherTransactions(); BackupProtocol();
+            VersionsAndRelease(); Archives(); Transactions(); LauncherTransactions(); BackupProtocol(); AlreadyInstalledProtocol();
             Console.WriteLine(assertions + " native updater assertions passed (temporary fixtures only; no network or real app updates)."); return 0;
         }
         catch (Exception e) { Console.Error.WriteLine(e); return 1; }

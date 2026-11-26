@@ -18,7 +18,7 @@ function handle(id, name = 'Notes') {
 
 // No real folder access or browser storage: exercise handle binding and races.
 function harness({ dir = null, saved, memoryOnly = false } = {}) {
-  const values = new Map(), reads = [], writes = [], deletes = [], messages = [], events = new Map();
+  const values = new Map(), reads = [], writes = [], deletes = [], messages = [], events = new Map(), modals = [], clipboardWrites = [];
   if (saved) values.set('sourceFolderPath', saved);
   class Element {
     constructor(selector, props, children) {
@@ -70,12 +70,29 @@ function harness({ dir = null, saved, memoryOnly = false } = {}) {
   const ZN = {
     db, store, sync: { dir, state: dir ? 'ready' : 'none', statusText: () => 'ready' },
     util: { h, clear: el => el.replaceChildren(), frame: fn => fn }, icon: () => h('svg'),
-    ui: { toast: message => messages.push(message), modal: () => ({ close() {} }) }
+    ui: { toast: message => messages.push(message), modal: options => {
+      const modal = { options, close() {} };
+      modals.push(modal);
+      return modal;
+    } }
   };
-  const context = { ZN, console: { warn() {}, error() {} }, setTimeout, clearTimeout, URL, navigator: {}, document: { getElementById: () => null } };
+  const context = { ZN, console: { warn() {}, error() {} }, setTimeout, clearTimeout, URL,
+    navigator: { clipboard: { async writeText(value) { clipboardWrites.push(value); } } },
+    document: { getElementById: () => null } };
   context.window = context;
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../app/js/source-folder.js'), 'utf8'), context, { filename: 'app/js/source-folder.js' });
-  return { source: ZN.sourceFolder, sync: ZN.sync, store, db, values, reads, writes, deletes, messages };
+  return { source: ZN.sourceFolder, sync: ZN.sync, store, db, values, reads, writes, deletes, messages, events, modals, clipboardWrites, context };
+}
+
+function elements(root) {
+  if (Array.isArray(root)) return root.flatMap(elements);
+  if (!root || typeof root !== 'object' || !root.selector) return [];
+  return [root, ...(root.children || []).flatMap(elements)];
+}
+function labelledButton(root, label) {
+  const buttons = elements(root).filter(el => el.selector.startsWith('button') && el.textContent === label);
+  assert.equal(buttons.length, 1, 'Expected one button: ' + label);
+  return buttons[0];
 }
 
 test('without a connected folder no source path is invented', async () => {
@@ -295,4 +312,111 @@ test('a newer save survives an earlier pending clear', async () => {
   await Promise.all([clear, save]);
   assert.equal(h.source.info().parentPath, 'D:\\New');
   assert.equal(h.values.get('sourceFolderPath').path, 'D:\\New');
+});
+
+test('the sidebar observes a restored connection before source-folder initialization finishes', async () => {
+  const h = harness();
+  const sidebar = h.source.button();
+  assert.match(sidebar.textContent, /Browser storage only/);
+  const restored = handle('restored', 'Z Note notebook');
+  const metadata = deferred();
+  h.db.onGet = () => metadata.promise;
+  h.sync.dir = restored;
+  h.sync.direct = true;
+  h.store.emit('sync');
+  assert.match(sidebar.textContent, /Z Note notebook/);
+  assert.doesNotMatch(sidebar.textContent, /Browser storage only/);
+  metadata.resolve({ handle: restored, path: 'E:\\Shared\\Z Note notebook' });
+  await settle();
+  assert.match(sidebar.textContent, /E:\\Shared\\Z Note notebook/);
+  await h.source.init();
+  assert.equal(h.events.get('sync').size, 1, 'button() and init() must share one observer');
+});
+
+test('sync instructions require a connected folder with a saved full path', async () => {
+  for (const dir of [null, handle('unknown', 'Z Note notebook')]) {
+    const h = harness({ dir });
+    await h.source.init();
+    assert.equal(h.source.syncInstructions(), '');
+  }
+  const h = harness({ dir: handle('saved', 'Notes') });
+  await h.source.init();
+  await h.source.setPath('D:\\Shared\\Notes');
+  const instructions = h.source.syncInstructions();
+  assert.match(instructions, /D:\\Shared\\Notes\\Z Note notebook/);
+  assert.match(instructions, /Open existing notebook/);
+  assert.match(instructions, /[Ss]ync/);
+  h.sync.dir = null;
+  h.store.emit('sync');
+  assert.equal(h.source.syncInstructions(), '');
+});
+
+test('OneDrive instructions preserve the account name and relative notebook path', async () => {
+  const h = harness({ dir: handle('onedrive', 'Z Note') });
+  await h.source.init();
+  await h.source.setPath('E:\\One Drive\\OneDrive - Example Company\\Z Note');
+  const full = h.source.info().notebookPath;
+  const instructions = h.source.syncInstructions();
+  assert.ok(instructions.includes(full));
+  const hints = instructions.split('\n').filter(line => !line.includes(full));
+  assert.ok(hints.some(line => line.includes('OneDrive - Example Company')));
+  assert.ok(hints.some(line => /Z Note[\\/]Z Note notebook/.test(line)));
+  assert.match(instructions, /different|differ|may vary/i);
+});
+
+test('direct notebook paths are not duplicated in sharing instructions', async () => {
+  const h = harness({ dir: handle('direct', 'Z Note notebook') });
+  h.sync.direct = true;
+  await h.source.init();
+  await h.source.setPath('C:\\Users\\Tester\\OneDrive\\Notes\\Z Note notebook');
+  const instructions = h.source.syncInstructions();
+  assert.ok(instructions.includes('C:\\Users\\Tester\\OneDrive\\Notes\\Z Note notebook'));
+  assert.doesNotMatch(instructions, /Z Note notebook[\\/]Z Note notebook/);
+});
+
+test('OneDrive-like names do not generate a guessed OneDrive-relative location', async () => {
+  const h = harness({ dir: handle('plain', 'Notes') });
+  await h.source.init();
+  await h.source.setPath('D:\\OneDriveBackup\\Notes');
+  const full = h.source.info().notebookPath;
+  const instructions = h.source.syncInstructions();
+  assert.ok(instructions.includes(full));
+  const hints = instructions.split('\n').filter(line => !line.includes(full)).join('\n');
+  assert.doesNotMatch(hints, /OneDriveBackup|inside OneDrive|OneDrive account|OneDrive folder:/i);
+});
+
+test('both folder dialogs share the same full-path panel and do not copy an ellipsis', async () => {
+  const h = harness({ dir: handle('unknown', 'Z Note notebook') });
+  h.sync.direct = true;
+  await h.source.init();
+  const panel = h.source.pathPanel();
+  assert.match(panel.textContent, /Folder on this PC/);
+  assert.equal(labelledButton(panel, 'Copy path').disabled, true);
+  assert.equal(labelledButton(panel, 'Copy sync instructions').disabled, true);
+  await labelledButton(panel, 'Copy path').onclick();
+  await labelledButton(panel, 'Copy sync instructions').onclick();
+  assert.equal(h.clipboardWrites.length, 0);
+  h.source.open();
+  const body = h.modals.at(-1).options.body;
+  assert.equal(elements(body).filter(el => el.selector.includes('source-path-summary')).length, 1);
+  assert.equal(labelledButton(body, 'Copy path').disabled, true);
+  assert.equal(labelledButton(body, 'Copy sync instructions').disabled, true);
+});
+
+test('copy actions use the latest saved path and are disabled after switching folders', async () => {
+  const h = harness({ dir: handle('first', 'Notes') });
+  await h.source.init();
+  await h.source.setPath('C:\\First\\Notes');
+  const panel = h.source.pathPanel();
+  await h.source.setPath('D:\\Moved\\Notes');
+  await labelledButton(panel, 'Copy path').onclick();
+  await labelledButton(panel, 'Copy sync instructions').onclick();
+  assert.equal(h.clipboardWrites[0], 'D:\\Moved\\Notes\\Z Note notebook');
+  assert.ok(h.clipboardWrites[1].includes('D:\\Moved\\Notes\\Z Note notebook'));
+  assert.doesNotMatch(h.clipboardWrites[1], /C:\\First/);
+  h.sync.dir = handle('second', 'Notes');
+  h.store.emit('sync');
+  await settle();
+  assert.equal(labelledButton(panel, 'Copy path').disabled, true);
+  assert.equal(labelledButton(panel, 'Copy sync instructions').disabled, true);
 });

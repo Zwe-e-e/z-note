@@ -305,6 +305,33 @@ test('new direct layout restores and legacy parent metadata still reconnects', a
   }
 });
 
+test('restored folder is announced while its browser permission query is still pending', async () => {
+  for (const direct of [false, true]) {
+    const parent = new Dir('Shared'), root = await notebook(parent, [page('note1', 'Stored')]);
+    const handle = direct ? root : parent, permission = deferred();
+    let queried = false, finished = false;
+    handle.queryPermission = () => { queried = true; return permission.promise; };
+    const meta = new Map(direct ? [['syncLocation', { handle, direct }]] : [['syncDir', handle]]);
+    const h = harness({ meta }), announcements = [];
+    h.S.on('sync', () => announcements.push({ handle: h.sync.dir, direct: h.sync.direct }));
+    const initialization = h.sync.init().then(() => { finished = true; });
+    await settle();
+
+    assert.equal(queried, true);
+    assert.equal(finished, false, 'Browser permission remains unresolved');
+    assert.ok(announcements.length > 0, 'Folder controls can render before browser permission resolves');
+    assert.equal(announcements[0].handle, handle);
+    assert.equal(announcements[0].direct, direct);
+    assert.equal(h.pages.size, 0, 'Restoring the display does not sync before permission is granted');
+    assert.deepEqual(h.mutations, []);
+
+    permission.resolve('granted');
+    await initialization;
+    await h.sync.idle();
+    assert.equal(h.pages.get('note1').title, 'Stored', 'Normal sync continues after permission is granted');
+  }
+});
+
 test('disconnect tombstone does not resurrect the legacy folder on restart', async () => {
   const parent = new Dir('Shared'); await notebook(parent, [page('note1', 'Stored')]);
   const meta = new Map([['syncDir', parent]]), h = harness({ meta });

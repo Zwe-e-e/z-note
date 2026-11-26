@@ -298,6 +298,42 @@ test('native error and malformed replies reject rather than treating failure as 
   }
 });
 
+test('exact already-current refusal after install is a known no-op without claiming success or allowing replay', async () => {
+  const h = harness(), { socket, result } = await h.start();
+  const rejected = assert.rejects(result, e => e.alreadyCurrent === true && e.uncertain === false && e.reopenRequired === false);
+  socket.update('error', { message: 'This app is already current. Check for updates again.' });
+  await rejected;
+  assert.equal(h.bridge.state().installedVersion, '');
+  assert.equal(h.bridge.state().installAttempted, true);
+  assert.equal(h.bridge.state().busy, false);
+  assert.equal(h.bridge.state().backupPath, BACKUP_PATH);
+  await assert.rejects(h.bridge.install(backup(), '2.4.1'), /already been started/);
+  assert.equal(socket.sent.filter(x => x.command === 'install').length, 1);
+});
+
+test('already-current text outside an active install must not trigger installed-app recovery', async () => {
+  const h = harness(), socket = await h.connect();
+  const result = h.bridge.install(backup(), '2.4.1');
+  const rejected = assert.rejects(result, e => e.alreadyCurrent !== true);
+  await turn();
+  assert.equal(socket.sent.at(-1).command, 'backup-begin');
+  socket.update('error', { message: 'This app is already current. Check for updates again.' });
+  await rejected;
+  assert.equal(h.bridge.state().installedVersion, '');
+  assert.equal(h.bridge.state().installAttempted, false);
+});
+
+test('similar or extended already-current messages remain uncertain after install was sent', async () => {
+  for (const message of ['This app is already current.', 'This app is already current. Check for updates again. Recovery failed.', 'Package digest mismatch. Previous app preserved.']) {
+    const h = harness(), { socket, result } = await h.start();
+    const rejected = assert.rejects(result, e => e.alreadyCurrent !== true && e.uncertain === true && e.reopenRequired === true);
+    socket.update('error', { message });
+    await rejected;
+    assert.equal(h.bridge.state().installedVersion, '');
+    assert.equal(h.bridge.state().installAttempted, true);
+  }
+});
+
 test('pagehide closes the native session and rejects pending work without replay', async () => {
   const h = harness(), socket = await h.connect();
   const result = h.bridge.install(backup(), '2.4.1');

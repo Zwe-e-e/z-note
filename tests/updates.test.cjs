@@ -36,6 +36,7 @@ class Element {
     Object.assign(this, props);
   }
   append(...children) { this.children.push(...children); }
+  contains(el) { return this === el || this.children.some(child => child instanceof Element && child.contains(el)); }
   replaceChildren(...children) { this.children = children; this.text = undefined; }
   addEventListener(name, fn) { this['on' + name] = fn; }
   get textContent() {
@@ -101,9 +102,9 @@ function nativeHarness(options = {}) {
   const t = harness(options), events = [], modals = [], listeners = new Map(), documentListeners = new Map();
   const app = h('div#app', { inert: false }), priorModal = h('div.modal', { inert: true });
   const notebook = { app: 'znote', version: 1, pages: [{ id: 'note-1', text: 'Keep me' }], images: [], settings: { sourceFolder: 'unchanged' } };
-  const state = { supported: true, installAttempted: false, backupPath: '' };
+  const state = { supported: true, version: options.nativeVersion || options.version || '2.3.0', installAttempted: false, backupPath: '' };
   const nativeCalls = [];
-  let reloads = 0;
+  let reloads = 0, closes = 0;
   function add(map, name, fn) { if (!map.has(name)) map.set(name, new Set()); map.get(name).add(fn); }
   function remove(map, name, fn) { if (map.has(name)) map.get(name).delete(fn); }
   Object.assign(t.current, {
@@ -148,10 +149,12 @@ function nativeHarness(options = {}) {
     removeEventListener(name, fn) { remove(documentListeners, name, fn); }
   };
   t.context.location = { reload() { events.push('reload'); reloads++; } };
+  t.context.closed = false;
+  t.context.close = () => { events.push('close'); closes++; if (options.closeThrows) throw new Error('Browser refused script close'); t.context.closed = !!options.closeSucceeds; };
   t.context.addEventListener = (name, fn) => add(listeners, name, fn);
   t.context.removeEventListener = (name, fn) => remove(listeners, name, fn);
   return { ...t, events, modals, listeners, documentListeners, app, priorModal, notebook, nativeCalls, nativeState: state,
-    get reloads() { return reloads; } };
+    get reloads() { return reloads; }, get closes() { return closes; } };
 }
 function automatic(root) {
   return one(root, el => el.selector === 'div.set-group' && el.children.some(child => child instanceof Element && child.selector === 'h3' && child.textContent === 'Automatic update'));
@@ -642,7 +645,7 @@ test('an uncertain install keeps editing and sync paused and cannot be replayed'
   }
 });
 
-test('a final save failure keeps the installed app open and restores access to unsaved notes', async () => {
+test('a final save failure keeps the installed app frozen until saving and reload can be retried', async () => {
   let checkpoints = 0;
   const t = nativeHarness({ checkpoint: async () => {
     checkpoints++;
@@ -657,10 +660,159 @@ test('a final save failure keeps the installed app open and restores access to u
   assert.match(status(modal), /app update is installed, but your latest notes could not be saved/);
   assert.match(status(modal), /pending picture.*Keep this window open/);
   assert.equal(all(modal, el => el.selector.startsWith('button') && el.textContent === 'Reload Z Note').length, 0);
+  assert.equal(t.app.inert, true);
+  assert.equal(t.events.includes('resume'), false);
+  assert.equal(t.listeners.get('beforeunload').size, 1);
+  assert.equal(t.listeners.get('keydown').size, 1);
+  assert.equal(all(modal, el => el.selector.startsWith('button') && el.textContent === 'Back to my notes').length, 0);
+  await button(modal, 'Retry save and reload').onclick();
+  assert.equal(t.reloads, 1);
+  assert.equal(t.nativeCalls.length, 1, 'Saving again must not repeat installation');
+  assert.equal(t.listeners.get('beforeunload').size, 0);
+});
+
+test('a stale browser offers reload when the launcher reports the release is already on disk', async () => {
+  for (const nativeVersion of ['2.6.0', '2.6.1']) {
+    const t = nativeHarness({ version: '2.5.1', nativeVersion, fetch: async () => response(release('2.6.0')) });
+    const root = t.updates.pane();
+    await button(root, 'Check for updates').onclick();
+    const reload = button(root, 'Reload installed version');
+    assert.equal(reload.disabled, false);
+    assert.equal(guide(root).hidden, true);
+    assert.equal(t.nativeCalls.length, 0);
+    assert.equal(t.reloads, 0, 'Checking must not reload without a click');
+    await reload.onclick();
+    assert.equal(t.reloads, 1);
+    assert.equal(t.nativeCalls.length, 0, 'Already installed files must not be installed again');
+    assert.equal(t.events.includes('exportAll'), false);
+    assert.ok(t.events.indexOf('pause') < t.events.indexOf('prepareExport'));
+    assert.ok(t.events.indexOf('prepareExport') < t.events.indexOf('checkpoint'));
+    assert.ok(t.events.indexOf('checkpoint') < t.events.indexOf('reload'));
+  }
+});
+
+test('install preflight rechecks disk version even if the earlier pane probe saw an older app', async () => {
+  const t = nativeHarness({ version: '2.5.1', fetch: async () => response(release('2.6.0')) });
+  const root = t.updates.pane();
+  await button(root, 'Check for updates').onclick();
+  const install = button(root, 'Install update automatically');
+  t.nativeState.version = '2.6.0';
+  await install.onclick();
+  assert.equal(t.nativeCalls.length, 0);
+  assert.equal(t.events.includes('exportAll'), false);
+  assert.equal(t.reloads, 1);
+  assert.ok(t.events.indexOf('checkpoint') < t.events.indexOf('reload'));
+});
+
+test('already-current refusal unlocks notes and offers a safe reload without reporting installation', async () => {
+  const failure = Object.assign(new Error('This app is already current. Check for updates again.'), { alreadyCurrent: true, uncertain: false, reopenRequired: false });
+  const t = nativeHarness({ install: async () => { throw failure; } });
+  await t.updates.installAutomatically({ version: '2.4.0' });
+  const modal = t.modals[0].el;
   assert.equal(t.app.inert, false);
+  assert.equal(t.priorModal.inert, true);
   assert.equal(t.events.filter(event => event === 'resume').length, 1);
   assert.equal(t.listeners.get('beforeunload').size, 0);
   assert.equal(t.listeners.get('keydown').size, 0);
+  assert.equal(t.reloads, 0);
+  assert.doesNotMatch(status(modal), /result could not be confirmed|Reopening your notebook/);
+  assert.ok(button(modal, 'Back to my notes'));
+  const saving = deferred();
+  t.current.checkpoint = () => saving.promise;
+  const reload = button(modal, 'Reload installed version').onclick();
+  await advanceUntil(() => t.events.filter(event => event === 'checkpoint').length >= 2);
+  assert.equal(t.reloads, 0, 'Reload must await newly saved notes');
+  assert.equal(t.app.inert, true);
+  assert.equal(t.events.filter(event => event === 'pause').length, 2, 'Reload must pause sync again after the error flow resumed it');
+  assert.equal(t.listeners.get('beforeunload').size, 1, 'Pending changes must be protected during the new save');
+  assert.equal(t.listeners.get('keydown').size, 1, 'Document shortcuts must remain blocked while the live notebook is saved');
+  button(modal, 'Back to my notes').onclick();
+  assert.equal(t.modals[0].closed, false, 'Closing the dialog during its pending save would strand a frozen notebook');
+  saving.resolve();
+  await reload;
+  assert.equal(t.reloads, 1);
+  assert.equal(t.nativeCalls.length, 1);
+});
+
+test('already-current refusal can return to notes without reloading', async () => {
+  const failure = Object.assign(new Error('This app is already current. Check for updates again.'), { alreadyCurrent: true });
+  const t = nativeHarness({ install: async () => { throw failure; } });
+  await t.updates.installAutomatically({ version: '2.4.0' });
+  button(t.modals[0].el, 'Back to my notes').onclick();
+  assert.equal(t.modals[0].closed, true);
+  assert.equal(t.app.inert, false);
+  assert.equal(t.reloads, 0);
+});
+
+test('failed reload after an already-current refusal can return safely to notes', async () => {
+  const failure = Object.assign(new Error('This app is already current. Check for updates again.'), { alreadyCurrent: true });
+  const t = nativeHarness({ install: async () => { throw failure; } });
+  await t.updates.installAutomatically({ version: '2.4.0' });
+  t.current.checkpoint = async () => { throw new Error('Disk full'); };
+  const modal = t.modals[0].el;
+  await button(modal, 'Reload installed version').onclick();
+  assert.equal(t.reloads, 0);
+  assert.equal(t.app.inert, true);
+  assert.equal(t.listeners.get('beforeunload').size, 1);
   button(modal, 'Back to my notes').onclick();
   assert.equal(t.modals[0].closed, true);
+  assert.equal(t.app.inert, false);
+  assert.equal(t.priorModal.inert, true);
+  assert.equal(t.listeners.get('beforeunload').size, 0);
+  assert.equal(t.listeners.get('keydown').size, 0);
+  assert.equal(t.events.at(-1), 'resume');
+});
+
+test('uncertain-result close waits for durable notes and explains the native window close fallback', async () => {
+  const failure = Object.assign(new Error('Connection lost'), { uncertain: true, reopenRequired: true });
+  const t = nativeHarness({ install: async () => { throw failure; } });
+  await t.updates.installAutomatically({ version: '2.4.0' });
+  const modal = t.modals[0].el, saving = deferred();
+  t.current.checkpoint = () => saving.promise;
+  const closing = button(modal, 'Close Z Note').onclick();
+  await advanceUntil(() => t.events.filter(event => event === 'checkpoint').length >= 2);
+  assert.equal(t.closes, 0);
+  assert.equal(t.listeners.get('beforeunload').size, 1);
+  assert.equal(t.listeners.get('keydown').size, 1);
+  assert.equal(t.app.inert, true);
+  saving.resolve();
+  await closing;
+  assert.equal(t.closes, 1);
+  assert.equal(t.listeners.get('beforeunload').size, 0);
+  assert.equal(t.reloads, 0);
+  assert.equal(t.nativeCalls.length, 1);
+  assert.equal(t.events.includes('resume'), false);
+  assert.equal(t.app.inert, true, 'Refused browser closure must not unlock a possibly inconsistent app');
+  assert.match(modal.textContent, /(?:window.*(?:X|×|close)|(?:X|×).*window)/i);
+});
+
+test('failed final save prevents uncertain-result closure and leaves protection in place', async () => {
+  const failure = Object.assign(new Error('Connection lost'), { uncertain: true });
+  const t = nativeHarness({ install: async () => { throw failure; } });
+  await t.updates.installAutomatically({ version: '2.4.0' });
+  t.current.checkpoint = async () => { throw new Error('Disk full'); };
+  const modal = t.modals[0].el;
+  await button(modal, 'Close Z Note').onclick();
+  assert.equal(t.closes, 0);
+  assert.equal(t.reloads, 0);
+  assert.equal(t.app.inert, true);
+  assert.equal(t.listeners.get('beforeunload').size, 1);
+  assert.equal(t.listeners.get('keydown').size, 1);
+  assert.equal(t.events.includes('resume'), false);
+  assert.match(modal.textContent, /Disk full/);
+});
+
+test('browser refusing script-close after a saved checkpoint keeps manual window-close guidance', async () => {
+  const failure = Object.assign(new Error('Connection lost'), { uncertain: true });
+  const t = nativeHarness({ closeThrows: true, install: async () => { throw failure; } });
+  await t.updates.installAutomatically({ version: '2.4.0' });
+  const modal = t.modals[0].el;
+  await button(modal, 'Close Z Note').onclick();
+  assert.equal(t.closes, 1);
+  assert.equal(t.listeners.get('beforeunload').size, 0);
+  assert.equal(t.app.inert, true);
+  assert.equal(t.reloads, 0);
+  assert.equal(t.events.includes('resume'), false);
+  assert.match(status(modal), /(?:window.*(?:X|×|close)|(?:X|×).*window)/i);
+  assert.doesNotMatch(status(modal), /notes could not be saved/);
 });

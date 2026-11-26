@@ -13,6 +13,10 @@ const book = { id: 'book1', type: 'notebook', title: 'My notebook', content: {},
 const original = { id: 'note1', type: 'note', parentId: 'book1', title: 'Keep my note', content: { blocks: [{ id: 'text1', t: 'p', html: 'Original text' }] }, created: 20, updated: 20, mod: 20 };
 const expense = attachments => ({ currency: 'SGD', budgets: { '2026-11': 50000 }, expenses: [{ id: 'expense1', date: '2026-11-25', description: 'Lunch', category: 'Food', amount: 1234, note: 'Receipt attached', attachments }] });
 const budgetPage = ids => ({ id: 'budget1', type: 'budget', parentId: 'book1', title: 'November', content: expense(ids), created: 30, updated: 30, mod: 30 });
+const projectExpense = ids => ({ ...expense(ids), periodMode: 'project',
+  projectPeriod: { start: '2026-11-01', end: '2027-02-28', reference: 'project-fixture' },
+  periodBudgets: { 'week:2026-11-23': 0, 'year:2026': 200000, 'project:2026-11-01:2027-02-28': 300000 }
+});
 
 async function harness(options = {}) {
   const data = { pages: new Map((options.pages || [book, original]).map(p => [p.id, clone(p)])), blobs: new Map(), meta: new Map([['settings', { seeded: true, seedAt: 0, tomb: {}, style: { paper: 'cream' } }]]) };
@@ -154,6 +158,23 @@ test('backup round trip preserves financial entries, receipt bytes and names', a
   assert.deepEqual(target.data.pages.get('budget1').content, expense([rec.id]));
   assert.equal(target.data.blobs.get(rec.id).kind, 'attachment');
   assert.equal(target.data.blobs.get(rec.id).name, 'invoice.pdf');
+  assert.equal(await target.data.blobs.get(rec.id).blob.text(), await rec.blob.text());
+});
+
+test('backup JSON round trip keeps project dates, each period budget, monthly budgets and receipts together', async () => {
+  const source = await harness(), rec = await seedBudget(source);
+  const expected = projectExpense([rec.id]);
+  source.S.get('budget1').content = clone(expected); source.S.touch('budget1');
+  // Cross the actual JSON export/import boundary, rather than sharing objects.
+  const backup = JSON.parse(JSON.stringify(await source.ZN.settings.exportAll()));
+  const target = await harness();
+  const result = await target.ZN.settings.importData(backup, 'replace');
+  assert.equal(result.pages, 3); assert.equal(result.images, 1);
+  assert.deepEqual(target.data.pages.get('budget1').content, expected);
+  assert.equal(target.data.pages.get('budget1').content.budgets['2026-11'], 50000);
+  assert.equal(target.data.pages.get('budget1').content.periodBudgets['week:2026-11-23'], 0);
+  assert.equal(target.data.blobs.get(rec.id).name, 'invoice.pdf');
+  assert.equal(target.data.blobs.get(rec.id).kind, 'attachment');
   assert.equal(await target.data.blobs.get(rec.id).blob.text(), await rec.blob.text());
 });
 
@@ -299,6 +320,32 @@ test('two PCs sync PDF expenses through the existing notebook layout', async () 
   assert.deepEqual(clone(second.S.get('budget1').content), expense([rec.id]));
   assert.equal(await (await second.S.getAttachment(rec.id)).blob.text(), await rec.blob.text());
   assert.equal(second.S.get('note1').title, 'Keep my note');
+});
+
+test('two PCs exchange period settings and budgets while preserving monthly entries and receipt bytes', async () => {
+  const first = await harness(), rec = await seedBudget(first), shared = new Folder('Shared');
+  const expected = projectExpense([rec.id]);
+  first.S.get('budget1').content = clone(expected); first.S.touch('budget1');
+  assert.equal(await first.ZN.sync.attach(shared, { choice: 'merge' }), true);
+  const second = await harness();
+  assert.equal(await second.ZN.sync.attach(shared, { choice: 'merge', existing: true }), true);
+  assert.deepEqual(clone(second.S.get('budget1').content), expected);
+  assert.equal(await (await second.S.getAttachment(rec.id)).blob.text(), await rec.blob.text());
+
+  const changed = second.S.get('budget1');
+  changed.content.periodMode = 'yearly';
+  changed.content.periodBudgets['year:2026'] = 250000;
+  second.S.touch(changed.id);
+  // Distinct fixture revisions keep the test deterministic at millisecond resolution.
+  changed.mod = Math.max(changed.mod, first.S.get('budget1').mod + 1);
+  await second.S.flush();
+  assert.equal(await second.ZN.sync.run(), true);
+  assert.equal(await first.ZN.sync.run(), true);
+  const returned = first.S.get('budget1').content;
+  assert.deepEqual(clone(returned), { ...expected, periodMode: 'yearly', periodBudgets: { ...expected.periodBudgets, 'year:2026': 250000 } });
+  assert.deepEqual(clone(returned.expenses[0].attachments), [rec.id]);
+  assert.equal(await (await first.S.getAttachment(rec.id)).blob.text(), await rec.blob.text());
+  assert.equal(first.S.get('note1').title, 'Keep my note');
 });
 
 test('an incomplete shared receipt leaves the prior notebook and folder connection intact', async () => {

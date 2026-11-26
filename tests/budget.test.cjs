@@ -364,3 +364,280 @@ test('history keeps only the most recent fifty budget changes', async () => {
   for (let i = 0; i < 51; i++) await h.press();
   assert.equal(h.originalPage.content.budgets['2026-11'], 100);
 });
+
+test('calendar periods use inclusive boundaries, including leap months and cross-year weeks', () => {
+  const b = logic();
+  const examples = [
+    [{ type: 'monthly', month: '2024-02' }, { type: 'monthly', start: '2024-02-01', end: '2024-02-29', key: '2024-02' }],
+    [{ type: 'monthly', month: '2026-02' }, { type: 'monthly', start: '2026-02-01', end: '2026-02-28', key: '2026-02' }],
+    [{ type: 'weekly', date: '2026-01-01' }, { type: 'weekly', start: '2025-12-29', end: '2026-01-04', key: 'week:2025-12-29' }],
+    [{ type: 'weekly', date: '2026-01-04' }, { type: 'weekly', start: '2025-12-29', end: '2026-01-04', key: 'week:2025-12-29' }],
+    [{ type: 'weekly', date: '2026-01-05' }, { type: 'weekly', start: '2026-01-05', end: '2026-01-11', key: 'week:2026-01-05' }],
+    [{ type: 'yearly', year: '2024' }, { type: 'yearly', start: '2024-01-01', end: '2024-12-31', key: 'year:2024' }],
+    [{ type: 'project', start: '2026-11-25', end: '2027-02-10' }, { type: 'project', start: '2026-11-25', end: '2027-02-10', key: 'project:2026-11-25:2027-02-10' }],
+    [{ type: 'project', start: '2026-11-25', end: '2026-11-25' }, { type: 'project', start: '2026-11-25', end: '2026-11-25', key: 'project:2026-11-25:2026-11-25' }]
+  ];
+  for (const [selection, expected] of examples) assert.deepEqual(plain(b.periodRange(selection)), expected);
+});
+
+test('weekly date arithmetic stays stable across daylight-saving transitions and timezones', () => {
+  const original = process.env.TZ;
+  try {
+    for (const zone of ['Asia/Singapore', 'America/New_York', 'Pacific/Auckland']) {
+      process.env.TZ = zone;
+      const b = logic();
+      assert.deepEqual(plain(b.periodRange({ type: 'weekly', date: '2026-03-08' })),
+        { type: 'weekly', start: '2026-03-02', end: '2026-03-08', key: 'week:2026-03-02' }, zone);
+      assert.deepEqual(plain(b.periodRange({ type: 'weekly', date: '2026-11-01' })),
+        { type: 'weekly', start: '2026-10-26', end: '2026-11-01', key: 'week:2026-10-26' }, zone);
+    }
+  } finally { if (original === undefined) delete process.env.TZ; else process.env.TZ = original; }
+});
+
+test('invalid, incomplete and reversed reporting ranges are rejected', () => {
+  const b = logic();
+  for (const selection of [null, {}, { type: 'daily', date: '2026-11-25' },
+    { type: 'monthly', month: '2026-13' }, { type: 'weekly', date: '2026-02-29' },
+    { type: 'yearly', year: '26' }, { type: 'yearly', year: '2026.5' },
+    { type: 'project', start: '2026-11-25' }, { type: 'project', start: '2026-11-26', end: '2026-11-25' },
+    { type: 'project', start: '2026-04-31', end: '2026-05-02' }]) {
+    assert.throws(() => b.periodRange(selection), undefined, JSON.stringify(selection));
+  }
+});
+
+test('weekly and project totals include both end dates and exclude adjacent expenses without modifying them', () => {
+  const b = logic(), data = content([
+    expense('before', 900, { date: '2025-12-28' }),
+    expense('first', 100, { date: '2025-12-29', attachments: ['invoice'] }),
+    expense('middle', 200, { date: '2026-01-01', category: 'Transport' }),
+    expense('last', 300, { date: '2026-01-04' }),
+    expense('after', 800, { date: '2026-01-05' })
+  ]);
+  const before = JSON.stringify(data);
+  for (const selection of [{ type: 'weekly', date: '2026-01-01' }, { type: 'project', start: '2025-12-29', end: '2026-01-04' }]) {
+    const result = b.periodSummary(data, selection);
+    assert.equal(result.spent, 600); assert.equal(result.count, 3);
+    assert.deepEqual(plain(result.expenses.map(row => row.id)), ['last', 'middle', 'first']);
+    assert.deepEqual(plain(result.categories.map(row => [row.name, row.amount])), [['Food & dining', 400], ['Transport', 200]]);
+    assert.ok(Math.abs(result.categories.reduce((total, row) => total + row.percentage, 0) - 100) < 1e-10);
+    assert.equal(result.budget, null); assert.equal(result.remaining, null);
+  }
+  assert.equal(JSON.stringify(data), before);
+});
+
+test('yearly summaries isolate the chosen year and retain leap-day spending', () => {
+  const b = logic(), data = content([
+    expense('old', 100, { date: '2023-12-31' }), expense('new-year', 200, { date: '2024-01-01' }),
+    expense('leap', 300, { date: '2024-02-29' }), expense('last', 400, { date: '2024-12-31' }),
+    expense('next', 500, { date: '2025-01-01' })
+  ]);
+  const summary = b.periodSummary(data, { type: 'yearly', year: '2024' });
+  assert.equal(summary.count, 3); assert.equal(summary.spent, 900);
+  assert.deepEqual(plain(summary.expenses.map(row => row.id)), ['last', 'leap', 'new-year']);
+});
+
+test('weekly, yearly, project and existing monthly budget amounts remain independent', () => {
+  const b = logic(), data = content([expense('Lunch', 1250)]);
+  data.periodBudgets = { 'week:2026-11-23': 0, 'year:2026': 30000, 'project:2026-11-01:2027-01-31': 50000 };
+  for (const [selection, expected] of [
+    [{ type: 'monthly', month: '2026-11' }, 10000],
+    [{ type: 'weekly', date: '2026-11-25' }, 0],
+    [{ type: 'yearly', year: '2026' }, 30000],
+    [{ type: 'project', start: '2026-11-01', end: '2027-01-31' }, 50000]
+  ]) {
+    const result = b.periodSummary(data, selection);
+    assert.equal(result.budget, expected); assert.equal(result.remaining, expected - 1250);
+  }
+  assert.equal(b.periodSummary(data, { type: 'weekly', date: '2026-11-30' }).budget, null);
+  assert.equal(b.periodSummary(data, { type: 'project', start: '2026-11-01', end: '2027-02-01' }).budget, null);
+  assert.equal(b.monthlySummary(data, '2026-11').budget, 10000);
+});
+
+test('period settings survive normalization alongside original monthly budgets and receipt references', () => {
+  const b = logic(), data = content([expense('Receipt', 1250, { attachments: ['r1', 'r2'], custom: 'keep' })]);
+  Object.assign(data, { periodMode: 'project', projectPeriod: { start: '2026-11-01', end: '2027-01-31' },
+    periodBudgets: { 'week:2026-11-23': 0, 'year:2026': 30000, 'project:2026-11-01:2027-01-31': 50000 }, extraSetting: 'keep' });
+  const before = JSON.stringify(data), normalized = b.normalizeContent(data);
+  assert.deepEqual(plain(normalized), data); assert.equal(JSON.stringify(data), before);
+  assert.deepEqual(plain(b.normalizeContent(content([]))), content([]), 'old data should not gain new settings just by opening');
+});
+
+test('normalization rejects malformed period budgets and project dates before importing them', () => {
+  const b = logic();
+  for (const fields of [
+    { periodMode: 'daily' }, { periodMode: 'project' }, { projectPeriod: null }, { projectPeriod: [] },
+    { projectPeriod: { start: '2026-11-25', end: '2026-11-24' } },
+    { projectPeriod: { start: '2026-02-29', end: '2026-03-01' } },
+    { periodBudgets: [] }, { periodBudgets: { 'week:2026-11-24': 100 } },
+    { periodBudgets: { 'year:2026.5': 100 } }, { periodBudgets: { 'year:2026': -1 } },
+    { periodBudgets: { 'year:2026': 1.5 } }, { periodBudgets: { 'project:2026-11-25:2026-11-24': 100 } },
+    { periodBudgets: { 'month:2026-11': 100 } }
+  ]) assert.throws(() => b.normalizeContent({ ...content([]), ...fields }), undefined, JSON.stringify(fields));
+});
+
+const control = (h, label) => {
+  const found = h.host.all().find(el => el.attributes['aria-label'] === label);
+  assert.ok(found, 'control exists: ' + label); return found;
+};
+async function changePeriod(h, mode) {
+  const select = control(h, 'Expense period'); select.value = mode; await Promise.all(select.fire('change'));
+}
+
+test('switching to weekly and yearly views changes all visible expense rows while retaining the original records', async () => {
+  const h = harness(content([expense('This week', 100), expense('Earlier month', 200, { date: '2026-11-01' }),
+    expense('Earlier year', 300, { date: '2026-02-01' }), expense('Other year', 400, { date: '2025-11-25' })]));
+  h.mount(); const original = plain(h.originalPage.content.expenses);
+  await changePeriod(h, 'weekly');
+  assert.equal(h.originalPage.content.periodMode, 'weekly');
+  assert.ok(h.button(h.host, 'This week')); assert.equal(h.button(h.host, 'Earlier month'), undefined);
+  assert.match(h.host.textContent, /SGD\s*1.00/);
+  await changePeriod(h, 'yearly');
+  assert.ok(h.button(h.host, 'This week')); assert.ok(h.button(h.host, 'Earlier month')); assert.ok(h.button(h.host, 'Earlier year'));
+  assert.equal(h.button(h.host, 'Other year'), undefined); assert.match(h.host.textContent, /SGD\s*6.00/);
+  assert.deepEqual(plain(h.originalPage.content.expenses), original);
+});
+
+test('browsing a different week or year does not save data or add undo entries', async () => {
+  const h = harness(content([expense('This week', 100), expense('Next week', 200, { date: '2026-12-01' })])); h.mount();
+  await changePeriod(h, 'weekly'); const weekly = JSON.stringify(h.originalPage.content), count = h.touched.length;
+  const week = control(h, 'Week containing'); week.value = '2026-12-01'; await Promise.all(week.fire('change'));
+  assert.ok(h.button(h.host, 'Next week')); assert.equal(h.button(h.host, 'This week'), undefined);
+  assert.equal(JSON.stringify(h.originalPage.content), weekly); assert.equal(h.touched.length, count);
+  await changePeriod(h, 'yearly'); const yearly = JSON.stringify(h.originalPage.content), afterMode = h.touched.length;
+  const year = control(h, 'Expense year'); year.value = '2025'; await Promise.all(year.fire('change'));
+  assert.equal(h.button(h.host, 'This week'), undefined); assert.equal(h.button(h.host, 'Next week'), undefined);
+  assert.equal(JSON.stringify(h.originalPage.content), yearly); assert.equal(h.touched.length, afterMode);
+});
+
+test('project dates and a separate project budget can be saved without changing monthly data, then undone', async () => {
+  const h = harness(content([expense('First day', 100, { date: '2026-11-10' }), expense('Last day', 200, { date: '2026-12-10' }),
+    expense('Outside project', 300, { date: '2026-12-11' })])), view = h.mount();
+  await changePeriod(h, 'project');
+  h.field('Start date').value = '2026-11-10'; h.field('End date').value = '2026-12-10';
+  h.submit(); await view.prepareExport(); await Promise.resolve();
+  assert.equal(h.originalPage.content.periodMode, 'project');
+  assert.deepEqual(plain(h.originalPage.content.projectPeriod), { start: '2026-11-10', end: '2026-12-10' });
+  assert.ok(h.button(h.host, 'First day')); assert.ok(h.button(h.host, 'Last day')); assert.equal(h.button(h.host, 'Outside project'), undefined);
+  h.button(h.host, 'Set project budget').fire('click'); h.field('Project budget (SGD)').value = '50';
+  h.submit(); await view.prepareExport(); await Promise.resolve();
+  assert.equal(h.originalPage.content.periodBudgets['project:2026-11-10:2026-12-10'], 5000);
+  assert.equal(h.originalPage.content.budgets['2026-11'], 10000); assert.equal(h.originalPage.content.expenses.length, 3);
+  await h.press();
+  assert.equal(h.originalPage.content.periodBudgets && h.originalPage.content.periodBudgets['project:2026-11-10:2026-12-10'], undefined);
+  await h.press(); assert.equal(h.originalPage.content.projectPeriod, undefined); assert.equal(h.originalPage.content.periodMode, undefined);
+  await h.press({ key: 'y' }); assert.equal(h.originalPage.content.periodMode, 'project');
+  assert.deepEqual(plain(h.originalPage.content.projectPeriod), { start: '2026-11-10', end: '2026-12-10' });
+});
+
+test('invalid project dates and cancelling project setup leave the current notebook unchanged', async () => {
+  const h = harness(content([expense('Keep', 100)])), view = h.mount(), before = JSON.stringify(h.originalPage.content);
+  await changePeriod(h, 'project'); h.field('Start date').value = '2026-12-01'; h.field('End date').value = '2026-11-01';
+  h.submit(); await assert.rejects(view.prepareExport()); await Promise.resolve();
+  assert.equal(JSON.stringify(h.originalPage.content), before); assert.equal(h.modals.length, 1);
+  h.button(h.modals[0].el, 'Cancel').fire('click'); await view.prepareExport();
+  assert.equal(h.modals.length, 0); assert.deepEqual(h.touched, []);
+  assert.equal(control(h, 'Expense period').value, 'monthly');
+});
+
+test('a saved project range is restored when the page reopens', () => {
+  const data = content([expense('Inside', 100, { date: '2025-02-01' }), expense('Outside', 200)]);
+  Object.assign(data, { periodMode: 'project', projectPeriod: { start: '2025-01-01', end: '2025-03-31' },
+    periodBudgets: { 'project:2025-01-01:2025-03-31': 10000 } });
+  const h = harness(data); h.mount();
+  assert.equal(control(h, 'Expense period').value, 'project');
+  assert.ok(h.button(h.host, 'Inside')); assert.equal(h.button(h.host, 'Outside'), undefined);
+  assert.ok(h.button(h.host, 'Edit project dates')); assert.deepEqual(h.touched, []);
+});
+
+test('editing weekly and yearly budgets keeps zero, removal and other periods independent', async () => {
+  const h = harness(content([expense('Lunch', 1250)])), view = h.mount();
+  await changePeriod(h, 'weekly');
+  h.button(h.host, 'Set weekly budget').fire('click'); h.field('Weekly budget (SGD)').value = '0';
+  h.submit(); await view.prepareExport(); await Promise.resolve();
+  assert.equal(h.originalPage.content.periodBudgets['week:2026-11-23'], 0); assert.match(h.host.textContent, /Over budget/);
+  await changePeriod(h, 'yearly');
+  h.button(h.host, 'Set yearly budget').fire('click'); h.field('Yearly budget (SGD)').value = '1000';
+  h.submit(); await view.prepareExport(); await Promise.resolve();
+  assert.equal(h.originalPage.content.periodBudgets['year:2026'], 100000);
+  h.button(h.host, 'Set yearly budget').fire('click'); h.field('Yearly budget (SGD)').value = '';
+  h.submit(); await view.prepareExport(); await Promise.resolve();
+  assert.equal(Object.hasOwn(h.originalPage.content.periodBudgets, 'year:2026'), false);
+  assert.equal(h.originalPage.content.periodBudgets['week:2026-11-23'], 0);
+  assert.equal(h.originalPage.content.budgets['2026-11'], 10000);
+  assert.deepEqual(plain(h.originalPage.content.expenses), [expense('Lunch', 1250)]);
+});
+
+test('invalid week and year selections retain the previous summary and do not save data', async () => {
+  const h = harness(content([expense('Keep', 100)])); h.mount();
+  await changePeriod(h, 'weekly');
+  const week = control(h, 'Week containing'), beforeWeek = week.value, countWeek = h.touched.length;
+  week.value = '2026-02-29'; await Promise.all(week.fire('change'));
+  assert.equal(week.value, beforeWeek); assert.ok(h.button(h.host, 'Keep')); assert.equal(h.touched.length, countWeek);
+  await changePeriod(h, 'yearly');
+  const year = control(h, 'Expense year'), beforeYear = year.value, countYear = h.touched.length;
+  year.value = ''; await Promise.all(year.fire('change'));
+  assert.equal(year.value, beforeYear); assert.ok(h.button(h.host, 'Keep')); assert.equal(h.touched.length, countYear);
+});
+
+test('Ctrl+Z immediately undoes a period change while the period selector retains focus', async () => {
+  const h = harness(content([expense('Keep', 100)])); h.mount();
+  const period = control(h, 'Expense period'); period.focus();
+  await changePeriod(h, 'weekly');
+  assert.equal(h.originalPage.content.periodMode, 'weekly');
+  assert.equal((await h.press()).defaultPrevented, true);
+  assert.equal(h.originalPage.content.periodMode, undefined); assert.equal(period.value, 'monthly');
+  assert.equal((await h.press({ shiftKey: true })).defaultPrevented, true);
+  assert.equal(h.originalPage.content.periodMode, 'weekly'); assert.equal(period.value, 'weekly');
+});
+
+function categoryOptions(h) {
+  const list = h.modals[0].el.querySelector('datalist');
+  assert.ok(list, 'expense category suggestions exist');
+  return list.querySelectorAll('option').map(option => option.value);
+}
+
+test('a saved custom category is available to the next expense and remains preloaded when editing', async () => {
+  const h = harness(), view = h.mount();
+  h.button(h.host, 'Add expense').fire('click'); fillExpense(h, { description: 'Site inspection' });
+  h.field('Category').value = 'Civil works';
+  h.submit(); await view.prepareExport(); await Promise.resolve();
+  h.button(h.host, 'Add expense').fire('click');
+  assert.ok(categoryOptions(h).includes('Civil works'));
+  assert.ok(categoryOptions(h).includes('Food & dining'), 'standard categories remain available');
+  fillExpense(h, { description: 'Concrete delivery', amount: '25.00' }); h.field('Category').value = 'Civil works';
+  h.submit(); await view.prepareExport(); await Promise.resolve();
+  assert.deepEqual(plain(h.originalPage.content.expenses.map(row => row.category)), ['Civil works', 'Civil works']);
+  h.button(h.host, 'Edit').fire('click');
+  assert.equal(h.field('Category').value, 'Civil works');
+  h.button(h.modals[0].el, 'Cancel').fire('click');
+});
+
+test('category suggestions include other periods and live expense pages without duplicate case variants or data changes', () => {
+  const current = content([
+    expense('Older permit', 100, { date: '2025-01-01', category: ' Permit fees ' }),
+    expense('Same category', 200, { category: 'permit FEES' })
+  ]);
+  const h = harness(current), other = { id: 'other-project', type: 'budget', content: content([
+    expense('Insurance', 300, { category: 'Project insurance' }), expense('Bus', 400, { category: 'transport' })
+  ]) }, trashed = { id: 'trash', type: 'budget', trashed: true, content: content([expense('Trash-only', 500, { category: 'Archived secret category' })]) };
+  const pages = [h.originalPage, other, trashed], before = JSON.stringify(pages), calls = [];
+  h.ZN.store.live = type => { calls.push(type); return pages.filter(page => page.type === type && !page.trashed); };
+  h.mount(); h.button(h.host, 'Add expense').fire('click');
+  const options = categoryOptions(h), keys = options.map(value => value.trim().toLowerCase());
+  assert.ok(options.includes('Permit fees'), 'category from an expense outside the visible month is available');
+  assert.ok(options.includes('Project insurance'), 'categories from other live expense pages are reusable');
+  assert.equal(keys.filter(value => value === 'permit fees').length, 1);
+  assert.equal(keys.filter(value => value === 'transport').length, 1);
+  assert.equal(options.includes('Archived secret category'), false);
+  assert.ok(calls.includes('budget'));
+  assert.equal(JSON.stringify(pages), before, 'building suggestions never renames existing categories');
+});
+
+test('a new expense starts with an unfiltered category field and an omitted category still saves as Other', async () => {
+  const h = harness(), view = h.mount();
+  h.button(h.host, 'Add expense').fire('click');
+  assert.equal(h.field('Category').value, '');
+  assert.ok(categoryOptions(h).includes('Other'));
+  fillExpense(h); h.submit(); await view.prepareExport(); await Promise.resolve();
+  assert.equal(h.originalPage.content.expenses[0].category, 'Other');
+});
