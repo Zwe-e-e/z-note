@@ -44,7 +44,7 @@
 .side-new .btn { width: 100%; }
 .side-nav { padding: 4px 18px 2px 10px; }
 .side-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 6px 16px 10px; margin-right: 10px; }
-.side-foot { padding: 6px 18px 10px 10px; margin-top: 2px; border-top: 1.5px dashed var(--rule-2); }
+.side-foot { padding: 6px 18px 10px 10px; margin-top: 2px; border-top: 1.5px dashed var(--rule-2); flex-shrink: 0; max-height: 50vh; overflow-y: auto; }
 .app-version { padding: 7px 8px 1px; color: var(--ink-3); font: 400 12px/1.4 var(--font-sans); user-select: text; }
 .source-folder { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 8px; margin-bottom: 4px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-2); text-align: left; cursor: pointer; }
 .source-folder:hover { background: var(--paper-3); }
@@ -52,9 +52,10 @@
 .source-folder > svg { flex: none; margin-top: 2px; }
 .source-folder-text { min-width: 0; display: grid; gap: 3px; }
 .source-folder-label { font: 600 11px/1.4 var(--font-sans); }
-.source-folder-value { font: 400 11px/1.5 var(--font-sans); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.source-folder-value { font: 400 11px/1.5 var(--font-sans); overflow-wrap: anywhere; }
 .source-path { padding: 12px 14px; border: 1px solid var(--rule-2); border-radius: 6px; background: var(--paper-2); font: 13px/1.6 var(--font-sans); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .source-path-summary { display: grid; gap: 10px; min-width: 0; }
+.source-path-shared { font: 600 13px/1.6 var(--font-sans); overflow-wrap: anywhere; user-select: text; }
 .source-path-summary .source-path-edit { margin-top: 0; }
 .source-path-summary .source-path-edit > .btn { margin-top: 10px; }
 .source-path-summary [hidden], .source-path-summary [role="status"]:empty { display: none; }
@@ -411,6 +412,9 @@ button.prow:hover { background: var(--paper-3); }
 /* ---------- style & data panel ---------- */
 .settings { display: grid; gap: 18px; padding-bottom: 6px; }
 .update-status { margin: 0; font-weight: 600; line-height: 1.5; }
+.update-install-dialog { min-width: 0; }
+.update-install-dialog .modal-body { min-width: 0; overflow-wrap: anywhere; padding-bottom: 22px; }
+.update-backup-path { white-space: pre-wrap; overflow-wrap: anywhere; }
 .update-details:empty { display: none; }
 .updates [hidden] { display: none; }
 .update-steps { padding-left: 22px; margin: 12px 0; font-size: 14px; line-height: 1.6; }
@@ -455,16 +459,20 @@ html[data-paper="night"] .seg button.on { color: var(--ink); }
 .sync-chip.busy { cursor: progress; }
 @keyframes zn-spin { to { transform: rotate(360deg); } }
 
-/* ---------- monthly budget & expense pages ---------- */
+/* ---------- budget & expense pages ---------- */
 .budget-page { max-width: 1220px; padding-bottom: 56px; }
 .budget-intro { margin: -4px 0 22px; color: var(--ink-2); font: 14px/1.6 var(--font-sans); }
-.budget-toolbar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
+.budget-toolbar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.budget-toolbar [hidden] { display: none; }
+.budget-period-note { color: var(--ink-2); font: 12px/1.6 var(--font-sans); margin-bottom: 24px; }
 .budget-toolbar > .btn { min-height: 37px; }
 .budget-toolbar > .btn.primary { margin-left: auto; }
 .budget-field { display: flex; flex-direction: column; align-items: stretch; gap: 7px; min-width: 0; font: 13px/1.4 var(--font-sans); }
 .budget-field > span { color: var(--ink-2); font-weight: 600; }
 .budget-field .input { width: 100%; min-width: 0; }
 .budget-toolbar input[type="month"] { width: 172px; }
+.budget-toolbar input[type="date"] { width: 160px; }
+.budget-toolbar input[type="number"] { width: 95px; }
 .budget-toolbar select { min-width: 88px; }
 .budget-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 28px; }
 .budget-stat { padding: 18px 19px 16px; background: var(--paper-2); border: 1px solid var(--rule-2); border-radius: 8px 11px 9px 10px; }
