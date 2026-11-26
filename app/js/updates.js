@@ -176,7 +176,13 @@
         h('button.btn.primary', { type: 'button', onclick: closeForRecovery }, 'Close Z Note'));
       else if (installed && !readyToReload) actions.append(h('button.btn.primary', { type: 'button', onclick: saveAndReload }, 'Retry save and reload'));
       else if (!readyToReload) {
-        if (e && e.alreadyCurrent) {
+        if (e && e.safeToResume) {
+          status.textContent = (e.outcome === 'rolled-back' ? 'Update stopped; the previous app was restored: ' :
+            'Update stopped before changing the app: ') + (e.message || 'Please try again later.');
+          actions.append(
+            h('p.set-note', 'You can return to your notes. Close and reopen Z Note before trying another update.'),
+            h('p.set-note', 'The notebook folder connection belongs to this PC. If sync is paused, open Source folder → Open existing notebook and select this PC’s copy of the same OneDrive notebook. Its full path may be different on each PC.'));
+        } else if (e && e.alreadyCurrent) {
           status.textContent = 'The app files are already up to date. Reload to open the installed version; your notes and folder settings are kept.';
           actions.append(h('button.btn.primary', { type: 'button', onclick: saveAndReload }, 'Reload installed version'));
         }

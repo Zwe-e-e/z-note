@@ -403,9 +403,9 @@
       if (save !== false) saveView();
     }
     const size = () => ({ w: board.clientWidth || 1000, h: board.clientHeight || 700 });
-    function zoomAt(k2, sx, sy) {
+    function zoomAt(k2, sx, sy, snapToActualSize = true) {
       k2 = clamp(k2, 0.1, 4);
-      if (Math.abs(k2 - 1) < 0.03) k2 = 1;
+      if (snapToActualSize && Math.abs(k2 - 1) < 0.03) k2 = 1;
       const wx = (sx - view.x) / view.k, wy = (sy - view.y) / view.k;
       view.k = k2;
       view.x = sx - wx * k2;
@@ -1489,7 +1489,11 @@
       // a mouse wheel moves in whole notches; a trackpad sends small, often diagonal, deltas
       const mouse = dx === 0 && (e.wheelDeltaY ? Math.abs(e.wheelDeltaY) % 120 === 0 : Math.abs(dy) >= 50);
       if (e.ctrlKey || e.metaKey) {
-        zoomAt(view.k * (mouse ? (dy < 0 ? 1.18 : 1 / 1.18) : Math.exp(-dy * 0.01)), p.sx, p.sy);
+        if (!dy) return;
+        // Fine control for mouse wheels and trackpads; cap large deltas at one 5% step.
+        const maxStep = Math.log(1.05);
+        const step = mouse ? -Math.sign(dy) * maxStep : clamp(-dy * 0.002, -maxStep, maxStep);
+        zoomAt(view.k * Math.exp(step), p.sx, p.sy, false);
       } else if (mouse && (S.settings.wheel || 'zoom') === 'zoom') {
         zoomAt(view.k * Math.pow(1.12, -dy / 100), p.sx, p.sy);
       } else {

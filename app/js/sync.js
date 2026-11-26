@@ -537,9 +537,16 @@
   function showBanner() {
     const top = document.getElementById('topbar');
     if (banner || !top || !sync.dir) return;
-    banner = h('div.banner', ZN.icon('folder', 16),
-      h('span', 'Sync with “' + sync.dir.name + '” is paused until you allow Z Note to use that folder again.'),
+    banner = h('div.banner.sync-access-banner', ZN.icon('folder', 16),
+      h('span', 'Sync with “' + sync.dir.name + '” needs folder access on this PC. If its location has changed, select the notebook here.'),
       h('button.btn.sm', { type: 'button', onclick: async () => { if (await sync.unlock()) ui.toast('Sync is back on.'); } }, 'Allow'),
+      h('button.btn.sm', { type: 'button', onclick: async e => {
+        const button = e.currentTarget;
+        button.disabled = true;
+        try { if (await sync.openExisting()) ui.toast('Notebook connected on this PC.'); }
+        catch (err) { if (err.name !== 'AbortError') ui.toast('Could not open the notebook: ' + (err.message || String(err)), { error: true, ms: 7000 }); }
+        finally { button.disabled = false; }
+      } }, 'Locate notebook on this PC…'),
       h('button.ibtn.sm', { type: 'button', 'aria-label': 'Dismiss', style: { marginLeft: '0' }, onclick: hideBanner }, ZN.icon('x', 14)));
     top.after(banner);
   }

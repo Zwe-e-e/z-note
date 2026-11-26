@@ -23,8 +23,10 @@
     if (failure) {
       const e = new Error(failure);
       e.alreadyCurrent = !!(details && details.alreadyCurrent);
-      e.reopenRequired = !e.alreadyCurrent && (installAttempted || closed);
-      e.uncertain = !e.alreadyCurrent && installAttempted && !installedVersion;
+      e.safeToResume = !!(details && details.safeToResume);
+      e.outcome = details && details.outcome || '';
+      e.reopenRequired = !e.alreadyCurrent && !e.safeToResume && (installAttempted || closed);
+      e.uncertain = !e.alreadyCurrent && !e.safeToResume && installAttempted && !installedVersion;
       item.reject(e);
     } else item.resolve(value);
   }
@@ -61,8 +63,16 @@
       // update lock and finishing recovery, before downloading or applying files.
       // It permits a saved reload, but does not confirm an installed version.
       const alreadyCurrent = !!(command && command.name === 'install' &&
+        value.outcome === undefined &&
         value.message === 'This app is already current. Check for updates again.');
-      fail(typeof value.message === 'string' && value.message ? value.message.slice(0, 2000) : 'The Windows update could not finish.', { alreadyCurrent });
+      // A terminal native result may release the editor only when it proves
+      // this exact install left the app unchanged or completed its rollback.
+      // Text errors and transport failures alone cannot establish that fact.
+      const safeToResume = !!(command && command.name === 'install' && backupPath &&
+        (value.outcome === 'unchanged' || value.outcome === 'rolled-back') &&
+        value.version === command.version && value.backupPath === backupPath);
+      fail(typeof value.message === 'string' && value.message ? value.message.slice(0, 2000) : 'The Windows update could not finish.',
+        { alreadyCurrent, safeToResume, outcome: safeToResume ? value.outcome : '' });
       return;
     }
     if (handshake) {
