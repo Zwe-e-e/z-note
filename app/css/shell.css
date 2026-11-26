@@ -141,6 +141,9 @@ button.crumb:hover { background: var(--paper-3); color: var(--ink); }
 }
 html[data-paper="night"] .banner { color: var(--ink); }
 .banner button { margin-left: auto; }
+.sync-access-banner { flex-wrap: wrap; }
+.sync-access-banner > span { flex: 1 1 260px; }
+.sync-access-banner > button { margin-left: 0; flex-shrink: 0; }
 
 /* ---------- floating layer ---------- */
 #layer { position: fixed; inset: 0; pointer-events: none; z-index: 1000; }
