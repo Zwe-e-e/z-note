@@ -451,16 +451,38 @@ internal static class NativeUpdateTests
     }
     private static int Main(string[] args)
     {
-        testRoot = Path.Combine(Path.GetTempPath(), "znu-" + Guid.NewGuid().ToString("N").Substring(0, 8)); Directory.CreateDirectory(testRoot);
+        string fixtureParent = null, fixtureName = "fixtures-" + Guid.NewGuid().ToString("N");
+        bool created = false;
         try
         {
-            bool focused = args.Length == 1 && args[0] == "--preparation-and-outcomes";
-            if (args.Length > 0 && !focused) throw new ArgumentException("Unknown native updater test group.");
+            bool focused = false;
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "--preparation-and-outcomes" && !focused) focused = true;
+                else if (args[i] == "--test-root" && fixtureParent == null && i + 1 < args.Length) fixtureParent = args[++i];
+                else throw new ArgumentException("Unknown or incomplete native updater test option.");
+            }
+            if (fixtureParent == null || !Path.IsPathRooted(fixtureParent)) throw new ArgumentException("Pass --test-root with an existing absolute fixture parent directory.");
+            fixtureParent = Path.GetFullPath(fixtureParent);
+            if (fixtureParent.Length > Path.GetPathRoot(fixtureParent).Length) fixtureParent = fixtureParent.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (!Directory.Exists(fixtureParent)) throw new ArgumentException("The native test fixture parent must exist.");
+            // The supplied path is only a parent; create and delete our own unique child.
+            testRoot = Path.Combine(fixtureParent, fixtureName);
+            if (Directory.Exists(testRoot) || File.Exists(testRoot)) throw new IOException("Native test fixture directory already exists.");
+            Directory.CreateDirectory(testRoot); created = true;
             VersionsAndRelease(); Archives(); PreparationFailures(); FailureStateTransactions(); InvalidRecoveryRecords(); BackupProtocol(); FailureOutcomesProtocol();
             if (!focused) { Transactions(); LauncherTransactions(); AlreadyInstalledProtocol(); }
             Console.WriteLine(assertions + " native updater assertions passed (temporary fixtures only; no network or real app updates)."); return 0;
         }
         catch (Exception e) { Console.Error.WriteLine(e); return 1; }
-        finally { if (Directory.Exists(testRoot)) Directory.Delete(testRoot, true); }
+        finally
+        {
+            if (created && Directory.Exists(testRoot))
+            {
+                string cleanupRoot = Path.GetFullPath(testRoot);
+                if (!String.Equals(Path.GetDirectoryName(cleanupRoot), fixtureParent, StringComparison.OrdinalIgnoreCase) || Path.GetFileName(cleanupRoot) != fixtureName) throw new IOException("Native test cleanup refused a directory outside its generated fixture.");
+                Directory.Delete(cleanupRoot, true);
+            }
+        }
     }
 }

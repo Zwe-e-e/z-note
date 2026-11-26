@@ -1,5 +1,5 @@
-# Read-only checks of the full portable ZIP and the legacy-compatible updater ZIP.
-# The legacy list is the exact path contract accepted by published v2.4.2 helpers.
+# Read-only checks of the full portable ZIP and the canonical updater ZIP.
+# v2.6.3+ includes the launcher in both; old migration releases used 37 files.
 param([string]$NativeHostPath)
 
 $ErrorActionPreference = 'Stop'
@@ -61,4 +61,11 @@ function CheckArchive([string]$archivePath, [string[]]$expectedFiles, [bool]$has
 }
 
 CheckArchive (Join-Path $projectRoot 'downloads/Z-Note-Portable.zip') ($legacyFiles + @('Z Note.exe')) $true
-CheckArchive (Join-Path $projectRoot ('downloads/Z-Note-v' + $version + '-Portable.zip')) $legacyFiles $false
+$includesUpdatedLauncher = [version]$version -ge [version]'2.6.3'
+$updaterFiles = if ($includesUpdatedLauncher) { $legacyFiles + @('Z Note.exe') } else { $legacyFiles }
+CheckArchive (Join-Path $projectRoot ('downloads/Z-Note-v' + $version + '-Portable.zip')) $updaterFiles $includesUpdatedLauncher
+if ($includesUpdatedLauncher) {
+    $fullHash = (Get-FileHash -LiteralPath (Join-Path $projectRoot 'downloads/Z-Note-Portable.zip') -Algorithm SHA256).Hash
+    $updateHash = (Get-FileHash -LiteralPath (Join-Path $projectRoot ('downloads/Z-Note-v' + $version + '-Portable.zip')) -Algorithm SHA256).Hash
+    if ($fullHash -ne $updateHash) { throw 'The full download and updater ZIP must contain identical application bytes.' }
+}
