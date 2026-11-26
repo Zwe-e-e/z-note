@@ -2,7 +2,7 @@
 # Run from any directory: powershell -NoProfile -File scripts/package-portable.ps1
 # Fixed ordering and ZIP timestamps make identical inputs reproducible on the
 # same PowerShell/.NET runtime. No personal notebook or repository scan is used.
-param([string]$NativeHostPath, [switch]$LegacyUpdater)
+param([string]$NativeHostPath, [switch]$LegacyUpdater, [switch]$UpdateAsset)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -13,10 +13,14 @@ $projectRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $outputDirectory = Join-Path $projectRoot 'downloads'
 $version = [IO.File]::ReadAllText((Join-Path $projectRoot 'VERSION.txt')).Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'VERSION.txt must contain an app release version such as 2.2.0.' }
-# v2.4.2 helpers require their original archive layout. The versioned release
-# asset supports that updater transition; the full Pages download also has
-# the new icon launcher. Both contain exactly the same core application.
-$archiveName = if ($LegacyUpdater) { 'Z-Note-v' + $version + '-Portable.zip' } else { 'Z-Note-Portable.zip' }
+# Current-org helpers (v2.5.0+) accept the icon launcher. Include it in the
+# canonical update asset so launcher fixes reach installed applications too.
+# Keep the older 37-file option for rebuilding historical migration packages.
+if ($LegacyUpdater -and $UpdateAsset) { throw 'Choose UpdateAsset or LegacyUpdater, not both.' }
+if ($LegacyUpdater -and [version]$version -ge [version]'2.6.3') {
+    throw 'v2.6.3 and later require the launcher in the update ZIP. Use -UpdateAsset.'
+}
+$archiveName = if ($LegacyUpdater -or $UpdateAsset) { 'Z-Note-v' + $version + '-Portable.zip' } else { 'Z-Note-Portable.zip' }
 $outputPath = Join-Path $outputDirectory $archiveName
 
 # Embed the release version for offline file:// use; VERSION.txt is the source
@@ -138,7 +142,7 @@ try {
 $result = Get-Item -LiteralPath $outputPath
 [pscustomobject]@{
     Version = $version
-    Format = if ($LegacyUpdater) { 'legacy-updater' } else { 'full-portable' }
+    Format = if ($LegacyUpdater) { 'legacy-updater' } elseif ($UpdateAsset) { 'full-updater' } else { 'full-portable' }
     Archive = $result.FullName
     Files = $files.Count
     HtmlAssetsVerified = $assetCount

@@ -1,5 +1,5 @@
 # Build the portable Z-icon entry point using the compiler included with Windows.
-param([string]$OutputPath)
+param([string]$OutputPath, [ValidateRange(0, 65534)][int]$LauncherRevision = 0)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $projectRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
@@ -22,8 +22,8 @@ using System.Reflection;
 [assembly: AssemblyTitle("Z Note portable launcher")]
 [assembly: AssemblyDescription("Open the portable Z Note app with background Keep Awake and automatic updates")]
 [assembly: AssemblyProduct("Z Note")]
-[assembly: AssemblyVersion("$version.0")]
-[assembly: AssemblyFileVersion("$version.0")]
+[assembly: AssemblyVersion("$version.$LauncherRevision")]
+[assembly: AssemblyFileVersion("$version.$LauncherRevision")]
 [assembly: AssemblyInformationalVersion("$version")]
 "@
 $versionSource = Join-Path ([IO.Path]::GetTempPath()) ('ZNoteLauncherVersion-' + [Guid]::NewGuid().ToString('N') + '.cs')
