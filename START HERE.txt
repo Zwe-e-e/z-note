@@ -1,7 +1,34 @@
 Z NOTE - PORTABLE BROWSER APP
-Version 2.6.1 - released 26 November 2026
+Version 2.6.2 - released 26 November 2026
 Check your installed version at the bottom of the sidebar or in Style & data.
 Use "Check for updates" in the sidebar or Style & data > Updates.
+
+NEW IN 2.6.2
+Failed updates offer Back to my notes when the helper confirms the app was not
+changed or was restored. An unconfirmed update still offers Close Z Note so
+recovery can finish safely. Read-only app files stop installation with a clear
+message before any app file changes. Notes and recovery backups are preserved.
+Recovery validates the complete file list and all original backup files before
+restoring anything. Files already restored to their original bytes are kept.
+The sync permission banner includes Locate notebook on this PC: select this
+PC's copy of the same notebook when the OneDrive path differs.
+Board Ctrl/Command + wheel zoom now uses about 5% per mouse-wheel step instead
+of 18%, with gentler trackpad zoom and smooth movement through 100%.
+
+IF AN OLDER UPDATE WINDOW IS ALREADY STUCK
+After an error appears, use the Windows title-bar X or Alt+F4 to close it, then
+reopen the same Z Note.exe once for recovery. An older open window cannot gain
+the new recovery buttons until it loads the updated application.
+If it opens, save a fresh backup from Style & data > Sync & backup. If recovery
+still fails, retain the automatic JSON backup shown in the error and preserve
+the old app and notebook folders. Do not delete update recovery files or
+overwrite a partly recovered app. Extract the full new ZIP into a separate
+writable folder, open Z Note.exe, and restore the latest JSON backup through
+Restore from a file > Add to my notebook. Check your notes and attachments.
+Then choose Open existing notebook and select this PC's copy of the shared
+notebook. Allow access and choose Combine both if asked. Wait for OneDrive to
+finish downloading before syncing. A new app location can have separate
+browser storage and needs its own folder permission.
 
 NEW IN 2.6.1
 The expense Category dropdown includes categories already used on your expense
@@ -16,7 +43,7 @@ All expenses and receipts are kept, including those outside the selected period.
 Existing pages stay monthly until you change them. The chosen mode and project
 dates are remembered and included in sync/backups. Ctrl+Z can undo these changes.
 Older v2.6.0 copies retain these settings but only display monthly reports;
-use v2.6.1 on each PC for the new period controls and category suggestions.
+use v2.6.1 or later on each PC for the new period controls and category suggestions.
 
 If the app files are already updated but an old window is still open, use Reload
 installed version to save your notes and load the installed app. Update errors

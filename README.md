@@ -1,8 +1,10 @@
 # Z Note
 
-**Current release: [v2.6.1](https://github.com/Zwe-e-e/z-note/releases/tag/v2.6.1)** · Released 26 November 2026 · [Release history](CHANGELOG.md)
+**Current release: [v2.6.2](https://github.com/Zwe-e-e/z-note/releases/tag/v2.6.2)** · Released 26 November 2026 · [Release history](CHANGELOG.md)
 
-**New in v2.6.1:** Weekly, monthly, yearly and custom project expense periods; category suggestions from saved expenses; full source-folder paths and copyable sync instructions; and recovery actions for a stuck automatic-update dialog. Existing notes, receipts, monthly budgets and source-folder settings are preserved.
+**New in v2.6.2:** Return to notes after an update is confirmed unchanged or successfully rolled back; clearer handling of read-only application files; stricter recovery checks; a **Locate notebook on this PC…** button for different OneDrive locations; and finer Ctrl/Command + wheel board zoom, about 5% per mouse-wheel step instead of 18%.
+
+**Included since v2.6.1:** Weekly, monthly, yearly and custom project expense periods; category suggestions from saved expenses; full source-folder paths and copyable sync instructions; and recovery actions for a stuck automatic-update dialog. Existing notes, receipts, monthly budgets and source-folder settings are preserved.
 
 In **Budget & expenses**, choose a **Period**: Monthly, Weekly, Yearly or Project. Weeks run Monday–Sunday; yearly reports cover January–December. Project saves a custom start and end date, both included. Use one budget page per project and name it accordingly. The expense list, category chart and totals all use that range. Each week, month, year and project range has its own optional budget; amounts are not added together across period types. Changing project dates keeps the previous budget saved for its original range. Expenses and receipts outside the displayed range remain stored. Period mode and project dates are remembered, synced, backed up and undoable. Existing pages remain monthly until changed; v2.6.0 copies preserve the new fields but only show monthly reports.
 
@@ -14,11 +16,11 @@ Your installed version appears at the bottom of the app sidebar and in the **Sty
 
 A portable notebook you download to your PC and open in your own browser. Notes, tasks, boards, screen snips, themes, local folder saving and Keep Awake are included.
 
-**[Download page](https://zwe-e-e.github.io/z-note/)** · **[Download Z Note v2.6.1 Portable ZIP](https://zwe-e-e.github.io/z-note/downloads/Z-Note-v2.6.1-With-Icon.zip)**
+**[Download page](https://zwe-e-e.github.io/z-note/)** · **[Download Z Note v2.6.2 Portable ZIP](https://zwe-e-e.github.io/z-note/downloads/Z-Note-v2.6.2-With-Icon.zip)**
 
 ## Download and start
 
-1. Download **Z-Note-v2.6.1-With-Icon.zip** and choose **Extract All**. Do not run the app from inside the ZIP.
+1. Download **Z-Note-v2.6.2-With-Icon.zip** and choose **Extract All**. Do not run the app from inside the ZIP.
 2. Save the extracted **Z Note** folder wherever you want on your PC.
 3. On Windows, double-click **Z Note.exe** (the blue Z icon). It opens your own Chrome or Edge browser in a dedicated window and enables background Keep Awake and automatic app updates. **Open Z Note.cmd** remains an alternative. You can also open **Z Note.html** directly, with visible-window Keep Awake and manual app updates.
 4. In the first-run dialog, click **Choose source folder** and select that extracted **Z Note** folder. Allow the browser to save files. The app creates a **Z Note notebook** subfolder for your pages and pictures. To reconnect notes from another PC, use **Open existing notebook…** and select **Z Note notebook** itself or its parent folder.
@@ -51,11 +53,11 @@ Attach one or more **PDF, PNG, JPG or WebP** receipts or invoices to each expens
 
 Use **Ctrl+Z** to undo saved budget changes, or **Ctrl+Y / Ctrl+Shift+Z** to redo. The same shortcuts work for task actions on lists and the main Tasks page, including completion, priorities and moves between lists. On Mac, use Command instead of Ctrl. While typing in a field, undo applies to that text. Page history lasts for the current open view and resets when you reopen it or sync replaces its data; it is not a substitute for backups.
 
-**Use v2.6.1 on each PC for the new period controls and saved-category suggestions.** Budget pages and receipts require **v2.6.0 or later** before syncing or restoring a backup; earlier versions cannot read these pages, and their backup importer can omit them. Keep a backup when upgrading. Large receipt collections also make backups larger; if the Windows updater's recovery-backup limit is reached, it offers the manual update route.
+**Use v2.6.1 or later on each PC for the new period controls and saved-category suggestions.** Budget pages and receipts require **v2.6.0 or later** before syncing or restoring a backup; earlier versions cannot read these pages, and their backup importer can omit them. Keep a backup when upgrading. Large receipt collections also make backups larger; if the Windows updater's recovery-backup limit is reached, it offers the manual update route.
 
 ## Folder saving and backups
 
-Choose a folder when setting up so your notes are saved as files as well as in browser storage. If the browser asks for permission again later, use **Allow** to reconnect it.
+Choose a folder when setting up so your notes are saved as files as well as in browser storage. If the browser asks for permission again later, use **Allow** to reconnect it. If the folder moved or has a different path on this PC, use **Locate notebook on this PC…** in the permission banner and select the same notebook in this PC's OneDrive or shared folder. Each PC grants its own access; changing the displayed path alone does not reconnect the folder.
 
 The sidebar shows **Source folder** and the notebook location, wrapping a saved full path without truncating it. Click it to copy the location, locate the connected folder, sync now, or open an existing notebook. Browsers expose the folder name rather than its full Windows path. Paste the selected folder's full path from File Explorer into **Folder on this PC** and click **Save full path**; this display label stays in that browser and does not change where notes are saved.
 
@@ -90,13 +92,17 @@ Click **Check for updates** in the sidebar, or open **Style & data → Updates**
 3. Copy the application files from its **Z Note** folder into your original **Z Note** app folder, replacing matching program files. Keep **Z Note notebook** and all backups. Do not delete the original folder.
 4. Reopen through your existing shortcut or **Open Z Note.cmd**, using the same location and browser profile. Check that your notes and source-folder settings are present.
 
-This migration ZIP keeps the existing launcher. For a new installation with the blue **Z Note.exe** icon and current features, use the full [v2.6.1 portable download](https://zwe-e-e.github.io/z-note/downloads/Z-Note-v2.6.1-With-Icon.zip). Use the [new download page](https://zwe-e-e.github.io/z-note/); the old GitHub Pages address does not redirect.
+This migration ZIP keeps the existing launcher. For a new installation with the blue **Z Note.exe** icon and current features, use the full [v2.6.2 portable download](https://zwe-e-e.github.io/z-note/downloads/Z-Note-v2.6.2-With-Icon.zip). Use the [new download page](https://zwe-e-e.github.io/z-note/); the old GitHub Pages address does not redirect.
 
 **From v2.5.0 onward**, open **Z Note.exe** or **Open Z Note.cmd** on Windows and use **Check for updates → Install update automatically** for later releases from the new repository. Close other Z Note windows and keep this window open while it works. Z Note saves a recovery backup, shows its path, verifies the download, updates application files in place, and reloads. Your notes, pictures, source-folder connection and display settings stay in place.
 
 Automatic installation requires working browser storage and the Windows launcher. If the result cannot be confirmed, follow the instruction to close and reopen the launcher so recovery can finish. Keep the recovery backup until you have checked your notebook. The manual copy steps above also remain available when opening the HTML directly or when the launcher cannot connect.
 
 In v2.6.1, if the files are already updated while an older app window is still open, use **Reload installed version** to save your notes and load those files. The update dialog also offers a safe return to notes or close/recovery action when an installation cannot continue.
+
+In v2.6.2, **Back to my notes** is available after the helper confirms that an update left the app unchanged or successfully restored the previous files. If the result remains uncertain, editing and folder sync stay paused and **Close Z Note** allows recovery on reopening. Read-only app files are detected before installation begins; Z Note preserves their protection and asks you to use a writable app copy. Recovery records and original files are verified before restoring them.
+
+**If an older window (including v2.6.0) is already stuck after an update error:** close it with the Windows title-bar **X** or **Alt+F4**, then reopen the same **Z Note.exe** once to let recovery run. The loaded older code cannot gain the new buttons until the updated app opens. If it opens, save a fresh JSON backup. If recovery still fails, keep the automatic JSON backup at the path shown in the error and preserve the old app and notebook folders. Do not delete its update recovery files or overwrite a partly recovered app. Extract the new full ZIP into a separate writable folder, open it, restore the most recent backup through **Restore from a file… → Add to my notebook**, and check your notes and attachments. Then use **Open existing notebook…** to select this PC's copy of the shared notebook, allowing access and choosing **Combine both** if prompted. Wait for OneDrive to finish before syncing. A new app location may have separate browser storage and needs its own folder permission.
 
 Keeping the same app location and browser profile retains browser notes and folder settings. If you choose a new app location or another PC, use **Open existing notebook…** to reconnect **Z Note notebook** or its parent. For notes kept only in browser storage, restore the saved JSON backup through **Restore from a file… → Add to my notebook**. Browser storage and folder permissions do not travel with a copied application folder.
 
@@ -161,6 +167,6 @@ powershell -NoProfile -File tests/test-package.ps1
 
 The packaging script includes only the app, launcher and quick guide, and verifies the archive contents. Personal notebooks, exported backups and credentials must never be published. `.gitignore` excludes standard notebook and backup paths; only the curated portable ZIP is allowed.
 
-For v2.6.1, build the full 38-file `downloads/Z-Note-Portable.zip`, then publish an identical versioned copy as `downloads/Z-Note-v2.6.1-With-Icon.zip` for the download page. `-LegacyUpdater` builds the 37-file `downloads/Z-Note-v2.6.1-Portable.zip` for existing automatic updaters; it preserves the installed launcher. Attach both versioned ZIPs and their `SHA256SUMS` file to the GitHub release. The helper includes the v2.6.1 update-recovery fix, and the full download includes a launcher with the current version. Keep the earlier v2.5.0 migration release available for installed v2.4.2 and older clients, which cannot automatically follow the repository-owner change.
+For v2.6.2, build the full 38-file `downloads/Z-Note-Portable.zip`, then publish an identical versioned copy as `downloads/Z-Note-v2.6.2-With-Icon.zip` for the download page. `-LegacyUpdater` builds the 37-file `downloads/Z-Note-v2.6.2-Portable.zip` for existing automatic updaters; it preserves the installed launcher. Attach both versioned ZIPs and their `SHA256SUMS` file to the GitHub release. The helper includes the v2.6.2 update-recovery fixes, and the full download includes a launcher with the current version. Keep the earlier v2.5.0 migration release available for installed v2.4.2 and older clients, which cannot automatically follow the repository-owner change.
 
 GitHub Pages publishes the `main` branch, repository root. Rebuild the ZIP whenever application files change so the download matches the source.

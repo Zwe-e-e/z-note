@@ -1,5 +1,15 @@
 # Z Note release history
 
+## v2.6.2 — 2026-11-26
+
+- Let failed automatic updates return to notes when the Windows helper confirms that application files were unchanged or successfully rolled back. Keep recovery protection and a close action when the result is uncertain.
+- Copy updater recovery files durably without inheriting read-only attributes. Detect read-only application files before installation, show an actionable error, and preserve the original app and recovery backup.
+- Validate complete, unique recovery records and all original backup files before restoring application files. Keep editing protected if recovery cannot be verified, and avoid rewriting files already restored to their verified original contents.
+- Offer **Locate notebook on this PC…** directly from the folder-permission banner, so a notebook can be reconnected when its local OneDrive path differs.
+- Make Ctrl/Command + mouse-wheel zoom on boards finer, with about 5% per wheel step instead of 18%. Reduce trackpad sensitivity, limit large wheel jumps, and allow smooth zoom through 100%.
+
+An already-open older app window cannot gain these fixes until it loads the updated files. If its update dialog is stuck after an error, close with the Windows title-bar X or Alt+F4, then reopen the same launcher once for recovery. Preserve the automatic backup; see the README update guide before opening a separate new copy.
+
 ## v2.6.1 — 2026-11-26
 
 - Offer categories already used on active expense pages in the Category dropdown, including expenses outside the selected period. Keep custom category entry and existing expense labels unchanged.
