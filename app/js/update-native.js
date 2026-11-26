@@ -17,23 +17,24 @@
   let installAttempted = false;
   const state = () => ({ connected, supported, version, maxBackupBytes, busy, error, backupPath, installedVersion, installAttempted });
 
-  function settle(item, failure, value) {
+  function settle(item, failure, value, details) {
     if (!item) return;
     clearTimeout(item.timer);
     if (failure) {
       const e = new Error(failure);
-      e.reopenRequired = installAttempted || closed;
-      e.uncertain = installAttempted && !installedVersion;
+      e.alreadyCurrent = !!(details && details.alreadyCurrent);
+      e.reopenRequired = !e.alreadyCurrent && (installAttempted || closed);
+      e.uncertain = !e.alreadyCurrent && installAttempted && !installedVersion;
       item.reject(e);
     } else item.resolve(value);
   }
-  function fail(message) {
+  function fail(message, details) {
     error = message;
     const previous = socket, waiting = handshake, pending = command;
     socket = null; connected = supported = false;
     handshake = command = connecting = null;
     settle(waiting, message);
-    settle(pending, message);
+    settle(pending, message, null, details);
     if (previous) { try { previous.close(); } catch (_) {} }
   }
   function transportFailure() {
@@ -56,7 +57,12 @@
       fail('The Windows updater protocol is not supported. ' + REOPEN); return;
     }
     if (value.stage === 'error') {
-      fail(typeof value.message === 'string' && value.message ? value.message.slice(0, 2000) : 'The Windows update could not finish.');
+      // Older helpers return this exact terminal rejection after taking the
+      // update lock and finishing recovery, before downloading or applying files.
+      // It permits a saved reload, but does not confirm an installed version.
+      const alreadyCurrent = !!(command && command.name === 'install' &&
+        value.message === 'This app is already current. Check for updates again.');
+      fail(typeof value.message === 'string' && value.message ? value.message.slice(0, 2000) : 'The Windows update could not finish.', { alreadyCurrent });
       return;
     }
     if (handshake) {

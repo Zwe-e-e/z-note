@@ -3,7 +3,7 @@
   'use strict';
   const ZN = window.ZN, S = ZN.store, db = ZN.db, h = ZN.util.h;
   const KEY = 'sourceFolderPath', SUB = 'Z Note notebook';
-  let current = null, saved = null, version = 0, initialized = false, control = null;
+  let current = null, saved = null, version = 0, initialized = false, watching = false, control = null;
   let writes = Promise.resolve();
   const dir = () => ZN.sync && ZN.sync.dir;
 
@@ -82,17 +82,47 @@
       if (attempt === version) { saved = null; paint(); }
     });
   }
+  function ensureWatching() {
+    if (watching) return;
+    watching = true;
+    S.on('sync', () => { if (current !== dir()) refresh(); else paint(); });
+  }
   function button() {
+    ensureWatching();
     if (!control) control = h('button.source-folder', { type: 'button', onclick: open },
       ZN.icon('folder', 16), h('span.source-folder-text', h('span.source-folder-label', 'Source folder'), h('span.source-folder-value')));
     paint();
     return control;
+  }
+  function sharedLocation(value) {
+    if (!value.connected || !value.fullPath) return '';
+    const parts = value.notebookPath.split(/[\\/]+/);
+    const root = parts.findIndex(part => /^OneDrive(?: - .+)?$/i.test(part));
+    if (root < 0) return '';
+    return 'Inside ' + parts[root] + ': ' + (parts.slice(root + 1).join('/') || '(root folder)');
+  }
+  function syncInstructions() {
+    const value = info();
+    if (!value.connected || !value.fullPath) return '';
+    const location = sharedLocation(value);
+    return [
+      'Z Note notebook',
+      'Folder on this PC: ' + value.notebookPath,
+      location,
+      location ? 'On another PC, find this location inside the same OneDrive account. Its drive letter and user folder may differ.'
+        : 'On another PC, locate the same notebook in your shared folder. The local path may differ.',
+      '1. Click Sync on this PC and wait for OneDrive or your shared-folder service to finish.',
+      '2. In Z Note on the other PC, choose Open existing notebook and select that same notebook folder. Allow folder access when prompted.',
+      '3. Click Sync on the other PC. Sync and wait for the folder service before switching PCs again.'
+    ].filter(Boolean).join('\n');
   }
   /* A stable path panel: normal sync status refreshes must not erase a draft. */
   function pathPanel() {
     let bound = dir(), dirty = false, busy = false, editing = !info().fullPath;
     const pathBox = h('div.source-path', { tabindex: '0', 'aria-label': 'Connected notebook folder path' });
     const hint = h('p.set-note');
+    const shared = h('div.source-path-shared');
+    const otherPC = h('p.set-note');
     const status = h('p.set-note', { role: 'status', 'aria-live': 'polite' });
     const input = h('input.input', { type: 'text', placeholder: 'C:\\Users\\Your name\\Documents\\Z Note', spellcheck: 'false', autocomplete: 'off' });
     input.addEventListener('input', () => { dirty = true; status.textContent = ''; });
@@ -113,11 +143,17 @@
       try { await navigator.clipboard.writeText(latest.notebookPath); status.textContent = 'Full notebook path copied.'; }
       catch (_) { status.textContent = 'Select the path above and copy it with Ctrl+C.'; }
     } }, 'Copy path');
+    const copyInstructions = h('button.btn.sm', { type: 'button', onclick: async () => {
+      const instructions = syncInstructions();
+      if (!instructions) { render(); return; }
+      try { await navigator.clipboard.writeText(instructions); status.textContent = 'Notebook location and sync instructions copied.'; }
+      catch (_) { status.textContent = 'Could not copy automatically. Select and copy the folder location above.'; }
+    } }, 'Copy sync instructions');
     const edit = h('button.btn.sm.quiet', { type: 'button', onclick: () => { editing = !editing; render(); if (editing) input.focus(); } }, 'Edit path');
     const label = h('span', 'Selected folder’s full path');
     const editor = h('div.source-path-edit', h('label.source-path-label', label, input), save);
-    const panel = h('div.source-path-summary', h('b', 'Connected notebook folder'), pathBox, hint,
-      h('div.set-actions', copy, edit), editor, status);
+    const panel = h('div.source-path-summary', h('b', 'Folder on this PC'), pathBox, hint,
+      h('div.set-actions', copy, copyInstructions, edit), shared, otherPC, editor, status);
     function render() {
       const value = info(), handle = dir();
       if (bound !== handle) { bound = handle; dirty = false; editing = !value.fullPath; status.textContent = ''; }
@@ -125,9 +161,16 @@
       if (!dirty) input.value = value.fullPath ? value.parentPath : '';
       hint.textContent = !value.connected ? 'Choose a sync folder below to keep a folder copy of your notebook.'
         : value.fullPath ? 'Saved full path on this PC. If you move or rename this folder, edit the displayed path here.'
-        : 'Full path not saved yet. Browsers hide it; paste the selected folder’s path from File Explorer once to keep it visible here.';
+        : 'Full path not saved yet. Browsers hide it; copy the selected folder’s address from File Explorer and paste it below once.';
+      shared.textContent = sharedLocation(value);
+      shared.hidden = !shared.textContent;
+      otherPC.hidden = !value.fullPath;
+      otherPC.textContent = shared.textContent
+        ? 'On another PC, find this location inside the same OneDrive account. The drive letter and user folder may differ. Use Open existing notebook to connect it there.'
+        : 'On another PC, use Open existing notebook and select the same notebook in your shared folder. Its local path may differ.';
       label.textContent = 'Full path of selected folder “' + value.folderName + '”';
       copy.disabled = !value.fullPath;
+      copyInstructions.disabled = !value.fullPath;
       edit.hidden = !value.fullPath;
       edit.textContent = editing ? 'Hide path editor' : 'Edit path';
       editor.hidden = !value.connected || value.fullPath && !editing && !dirty;
@@ -140,30 +183,10 @@
   }
   function open() {
     const handle = dir(), value = info();
-    const pathBox = h('div.source-path', { tabindex: '0' }, value.notebookPath);
     const status = h('p.set-note', { role: 'status', 'aria-live': 'polite' });
-    const input = h('input.input', { type: 'text', value: value.fullPath ? value.parentPath : '', placeholder: 'C:\\Users\\Your name\\Documents\\Z Note', spellcheck: 'false', autocomplete: 'off' });
     const fail = e => { status.textContent = e.message || String(e); };
     let busy = false;
-    const save = h('button.btn.sm', { type: 'button', onclick: async () => {
-      if (busy) return;
-      if (handle !== dir()) { fail(new Error('The source folder changed. Close this dialog and open it again.')); return; }
-      busy = true; save.disabled = true;
-      try {
-        if (input.value.trim()) await setPath(input.value); else await clearPath();
-        pathBox.textContent = info().notebookPath;
-        status.textContent = input.value.trim() ? 'Full path saved for display on this browser. The connected folder has not changed.' : 'Showing the folder location supplied by your browser.';
-      } catch (e) { fail(e); }
-      finally { busy = false; save.disabled = false; }
-    } }, 'Save display path');
     const actions = h('div.set-actions',
-      h('button.btn.sm', { type: 'button', disabled: !value.connected, onclick: async () => {
-        if (handle !== dir()) { fail(new Error('The source folder changed. Close this dialog and open it again.')); return; }
-        try {
-          await navigator.clipboard.writeText(pathBox.textContent);
-          status.textContent = 'Copied ' + (info().fullPath ? 'the saved full path.' : 'the folder location (not a full Windows path).');
-        } catch (_) { status.textContent = 'Could not copy automatically. Select the path above and copy it.'; }
-      } }, 'Copy location'),
       value.connected && ZN.sync.supported ? h('button.btn.sm', { type: 'button', onclick: async () => {
         if (handle !== dir()) { fail(new Error('The source folder changed. Close this dialog and open it again.')); return; }
         try {
@@ -197,15 +220,9 @@
     }
     dialog = ZN.ui.modal({ title: 'Source folder', width: 590,
       body: [
-        h('p.modal-text', value.connected ? 'Connected notebook location:' : S.memoryOnly ? 'No source folder is connected. Notes are only kept for this temporary session.' : 'No source folder is connected. Your notes are stored in this browser.'),
-        pathBox, actions,
+        pathPanel(), actions,
         value.connected ? h('p.set-note', 'Sync: ' + ZN.sync.statusText() + '.') : null,
         h('p.set-note', 'On another PC, use Open existing notebook and select the same notebook in OneDrive or a shared network folder. You can choose “Z Note notebook” itself or its parent. Each PC must allow folder access. Sync on the first PC, wait for the folder service to finish, then sync on the other PC.'),
-        value.connected ? h('div.source-path-edit',
-          h('p.set-note', 'Browsers show the folder name but hide its full Windows path. You can use Locate folder to inspect the connected location.'),
-          h('label.source-path-label', 'Selected folder’s full path (optional)', input),
-          h('p.set-note.muted', 'Paste the path of “' + value.folderName + '” from File Explorer. This is a display label you provide; it does not move your notes or change the connected folder. Clear it to show the folder name again.'),
-          save) : null,
         status,
         h('button.btn.quiet', { type: 'button', onclick: () => { dialog.close(); ZN.settings.open('data'); } }, value.connected ? 'Manage source folder & backups' : 'Choose a source folder')
       ], buttons: [{ label: 'Done', primary: true }]
@@ -214,8 +231,8 @@
   async function init() {
     if (initialized) return;
     initialized = true;
-    S.on('sync', () => { if (current !== dir()) refresh(); });
+    ensureWatching();
     await refresh();
   }
-  ZN.sourceFolder = { init, refresh, info, setPath, clearPath, button, pathPanel, open };
+  ZN.sourceFolder = { init, refresh, info, setPath, clearPath, button, pathPanel, syncInstructions, open };
 })();

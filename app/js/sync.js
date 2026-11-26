@@ -512,6 +512,8 @@
     } catch (e) { sync.dir = null; sync.direct = false; }
     if (!sync.dir) return;
     sync.lastAt = S.settings.syncAt || 0;
+    // Show the restored location even if the browser delays its permission query.
+    S.emit('sync');
     sync.state = await permission(false);
     S.emit('sync');
     if (sync.state === 'locked') showBanner(); else run();

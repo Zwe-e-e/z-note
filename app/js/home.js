@@ -171,12 +171,49 @@
   const CATEGORIES = ['Food & dining', 'Groceries', 'Transport', 'Home & bills', 'Shopping', 'Health', 'Travel', 'Entertainment', 'Education', 'Other'];
   const COLORS = ['#4977b8', '#d68a40', '#629a72', '#b26b87', '#8776b7', '#53a0a1', '#c36257', '#a09450', '#758398', '#977260'];
   const MAX_AMOUNT = 99999999999; // 999,999,999.99 in the board's currency
+  const PERIOD_MODES = ['monthly', 'weekly', 'yearly', 'project'];
   const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
   const validMonth = value => typeof value === 'string' && /^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(value);
   function validDate(value) {
     if (typeof value !== 'string' || !/^[1-9]\d{3}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value)) return false;
-    const a = value.split('-').map(Number), date = new Date(a[0], a[1] - 1, a[2]);
-    return date.getFullYear() === a[0] && date.getMonth() === a[1] - 1 && date.getDate() === a[2];
+    const a = value.split('-').map(Number), date = new Date(Date.UTC(a[0], a[1] - 1, a[2]));
+    return date.getUTCFullYear() === a[0] && date.getUTCMonth() === a[1] - 1 && date.getUTCDate() === a[2];
+  }
+  function periodRange(selection) {
+    if (!selection || typeof selection !== 'object' || Array.isArray(selection) || !PERIOD_MODES.includes(selection.type)) throw new Error('Choose a valid expense period.');
+    const type = selection.type;
+    let start, end, key;
+    if (type === 'monthly') {
+      if (!validMonth(selection.month)) throw new Error('Choose a valid month.');
+      const [year, month] = selection.month.split('-').map(Number);
+      start = selection.month + '-01';
+      end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+      key = selection.month;
+    } else if (type === 'yearly') {
+      if (typeof selection.year !== 'string' || !/^[1-9]\d{3}$/.test(selection.year)) throw new Error('Choose a year from 1000 to 9999.');
+      start = selection.year + '-01-01'; end = selection.year + '-12-31'; key = 'year:' + selection.year;
+    } else if (type === 'weekly') {
+      if (!validDate(selection.date)) throw new Error('Choose a valid date within the week.');
+      const [year, month, day] = selection.date.split('-').map(Number);
+      const monday = new Date(Date.UTC(year, month - 1, day));
+      monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+      const sunday = new Date(monday.getTime()); sunday.setUTCDate(sunday.getUTCDate() + 6);
+      start = monday.toISOString().slice(0, 10); end = sunday.toISOString().slice(0, 10); key = 'week:' + start;
+    } else {
+      start = selection.start; end = selection.end; key = 'project:' + start + ':' + end;
+    }
+    if (!validDate(start) || !validDate(end) || start > end) throw new Error('Choose a valid start and end date, with the end on or after the start (years 1000–9999).');
+    return { type, start, end, key };
+  }
+  function validPeriodBudgetKey(key) {
+    const parts = key.split(':');
+    let range;
+    try {
+      if (parts.length === 2 && parts[0] === 'week') range = periodRange({ type: 'weekly', date: parts[1] });
+      else if (parts.length === 2 && parts[0] === 'year') range = periodRange({ type: 'yearly', year: parts[1] });
+      else if (parts.length === 3 && parts[0] === 'project') range = periodRange({ type: 'project', start: parts[1], end: parts[2] });
+    } catch (_) { return false; }
+    return !!range && range.key === key;
   }
   function parseAmount(value) {
     if (typeof value !== 'string') return null;
@@ -201,6 +238,29 @@
       if (!validMonth(month) || !Number.isSafeInteger(value) || value < 0 || value > MAX_AMOUNT) throw new Error('The budget for ' + month + ' is invalid.');
       budgets[month] = value;
     });
+    const periodFields = {};
+    if (own(raw, 'periodMode')) {
+      if (!PERIOD_MODES.includes(raw.periodMode)) throw new Error('The budget page has an invalid period mode.');
+      periodFields.periodMode = raw.periodMode;
+    }
+    if (own(raw, 'projectPeriod')) {
+      const project = raw.projectPeriod;
+      if (!project || typeof project !== 'object' || Array.isArray(project)) throw new Error('The project period is invalid.');
+      const range = periodRange({ type: 'project', start: project.start, end: project.end });
+      periodFields.projectPeriod = Object.assign({}, project, { start: range.start, end: range.end });
+    }
+    if (raw.periodMode === 'project' && !own(periodFields, 'projectPeriod')) throw new Error('Set the project start and end dates before using project mode.');
+    if (own(raw, 'periodBudgets')) {
+      const input = raw.periodBudgets;
+      if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('The period budgets are invalid.');
+      const periods = {};
+      Object.keys(input).forEach(key => {
+        const value = input[key];
+        if (!validPeriodBudgetKey(key) || !Number.isSafeInteger(value) || value < 0 || value > MAX_AMOUNT) throw new Error('The budget for ' + key + ' is invalid.');
+        periods[key] = value;
+      });
+      periodFields.periodBudgets = periods;
+    }
     const expenses = inputExpenses.map(row => {
       if (!row || typeof row !== 'object' || typeof row.id !== 'string' || !row.id || seen.has(row.id)) throw new Error('An expense has a missing or repeated ID.');
       seen.add(row.id);
@@ -210,29 +270,33 @@
       if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string' || !id)) throw new Error('An expense has invalid receipt references.');
       return Object.assign({}, row, { description: row.description, category: row.category.trim() || 'Other', note: row.note || '', attachments: Array.from(new Set(ids)) });
     });
-    return Object.assign({}, raw, { currency, budgets, expenses });
+    return Object.assign({}, raw, { currency, budgets, expenses }, periodFields);
   }
   function attachmentIds(value) {
     const content = value && value.content ? value.content : value;
     return Array.from(new Set((content && Array.isArray(content.expenses) ? content.expenses : [])
       .flatMap(row => row && Array.isArray(row.attachments) ? row.attachments.filter(id => typeof id === 'string' && id) : [])));
   }
-  function monthlySummary(raw, month) {
-    if (!validMonth(month)) throw new Error('Choose a valid month.');
+  function periodSummary(raw, selection) {
+    const period = periodRange(selection);
     const content = normalizeContent(raw);
-    const expenses = content.expenses.filter(row => row.date.slice(0, 7) === month)
+    const expenses = content.expenses.filter(row => row.date >= period.start && row.date <= period.end)
       .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
     const totals = new Map();
     let spent = 0;
     expenses.forEach(row => {
       spent += row.amount;
-      if (!Number.isSafeInteger(spent)) throw new Error('The monthly total is too large to calculate accurately.');
+      if (!Number.isSafeInteger(spent)) throw new Error('The period total is too large to calculate accurately.');
       totals.set(row.category, (totals.get(row.category) || 0) + row.amount);
     });
     const categories = Array.from(totals, ([name, amount]) => ({ name, amount, percentage: spent ? amount / spent * 100 : 0 }))
       .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
-    const budget = own(content.budgets, month) ? content.budgets[month] : null;
-    return { month, currency: content.currency, expenses, count: expenses.length, spent, budget, remaining: budget === null ? null : budget - spent, categories };
+    const budgets = period.type === 'monthly' ? content.budgets : content.periodBudgets || {};
+    const budget = own(budgets, period.key) ? budgets[period.key] : null;
+    return { period, currency: content.currency, expenses, count: expenses.length, spent, budget, remaining: budget === null ? null : budget - spent, categories };
+  }
+  function monthlySummary(raw, month) {
+    return Object.assign({ month }, periodSummary(raw, { type: 'monthly', month }));
   }
   function textOf(page) {
     const c = page && page.content || {};
@@ -240,11 +304,13 @@
   }
   const money = (minor, currency) => new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'code', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(minor / 100);
   const monthLabel = month => new Date(Number(month.slice(0, 4)), Number(month.slice(5)) - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  const dateLabel = date => new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8))).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-  ZN.budget = { blank, normalizeContent, attachmentIds, textOf, parseAmount, monthlySummary, validMonth, validDate, amountText, money, currencies: CURRENCIES.slice() };
+  const dateLabel = date => new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8))).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  ZN.budget = { blank, normalizeContent, attachmentIds, textOf, parseAmount, monthlySummary, periodRange, periodSummary, validMonth, validDate, amountText, money, currencies: CURRENCIES.slice() };
 
   ZN.views.budget = function (el, page) {
     let alive = true, month = U.ymd().slice(0, 7), revision = 0, activeEditor = null, pendingSave = null, pendingHistory = null;
+    let weekDate = U.ymd(), year = U.ymd().slice(0, 4);
+    const periodNames = { monthly: 'Monthly', weekly: 'Weekly', yearly: 'Yearly', project: 'Project' };
     const history = [];
     let historyAt = 0;
     const currentPage = () => {
@@ -252,6 +318,16 @@
       return page;
     };
     const content = () => normalizeContent(currentPage().content);
+    const selection = (value = content()) => {
+      const type = value.periodMode || 'monthly';
+      if (type === 'weekly') return { type, date: weekDate };
+      if (type === 'yearly') return { type, year };
+      if (type === 'project') return { type, start: value.projectPeriod.start, end: value.projectPeriod.end };
+      return { type: 'monthly', month };
+    };
+    const rangeLabel = range => range.type === 'monthly' ? monthLabel(range.start.slice(0, 7))
+      : range.type === 'yearly' ? range.start.slice(0, 4)
+      : range.start + ' – ' + range.end;
     const snapshot = () => JSON.stringify(content());
     function saveContent(value) {
       const before = snapshot(), after = JSON.stringify(normalizeContent(value));
@@ -270,16 +346,26 @@
     const undoButton = h('button.btn', { type: 'button', title: 'Undo (Ctrl+Z)', 'aria-keyshortcuts': 'Control+Z Meta+Z', onclick: () => travelHistory(-1) }, ZN.icon('undo', 15), 'Undo');
     const redoButton = h('button.btn', { type: 'button', title: 'Redo (Ctrl+Y or Ctrl+Shift+Z)', 'aria-keyshortcuts': 'Control+Y Control+Shift+Z Meta+Shift+Z', onclick: () => travelHistory(1) }, ZN.icon('redo', 15), 'Redo');
     const monthInput = h('input.input', { type: 'month', value: month, 'aria-label': 'Expense month' });
+    const periodSelect = h('select.input', { 'aria-label': 'Expense period' },
+      ['monthly', 'weekly', 'yearly', 'project'].map(value => h('option', { value }, periodNames[value])));
+    const weekInput = h('input.input', { type: 'date', value: weekDate, 'aria-label': 'Week containing' });
+    const yearInput = h('input.input', { type: 'number', min: 1000, max: 9999, step: 1, value: year, 'aria-label': 'Expense year' });
+    const monthField = h('label.budget-field', h('span', 'Month'), monthInput);
+    const weekField = h('label.budget-field', h('span', 'Week containing'), weekInput);
+    const yearField = h('label.budget-field', h('span', 'Year'), yearInput);
+    const projectDates = h('button.btn.budget-project-dates', { type: 'button', onclick: editProject }, 'Edit project dates');
+    const periodNote = h('p.budget-period-note');
+    const budgetButton = h('button.btn', { type: 'button', onclick: editBudget }, 'Set monthly budget');
     const currencySelect = h('select.input', { 'aria-label': 'Budget currency' }, CURRENCIES.map(code => h('option', { value: code }, code)));
     const addButton = h('button.btn.primary', { type: 'button', onclick: () => editExpense() }, ZN.icon('plus', 15), 'Add expense');
     const head = ZN.pageHead(page, { onLeave: () => addButton.focus() });
     const summaryHost = h('div.budget-summary'), chartHost = h('div.budget-chart-host'), listHost = h('div.budget-list');
     const sheet = h('div.sheet.page.budget-page', head.el,
-      h('p.budget-intro', 'Keep a monthly budget, record expenses, and keep receipts with each entry.'),
-      h('div.budget-toolbar', h('label.budget-field', h('span', 'Month'), monthInput),
+      h('p.budget-intro', 'Plan spending by week, month, year, or project. Keep receipts with every expense.'),
+      h('div.budget-toolbar', h('label.budget-field', h('span', 'Period'), periodSelect), monthField, weekField, yearField, projectDates,
         h('label.budget-field', h('span', 'Currency'), currencySelect),
-        h('button.btn', { type: 'button', onclick: editBudget }, 'Set monthly budget'), undoButton, redoButton, addButton),
-      summaryHost, chartHost, announcement, listHost);
+        budgetButton, undoButton, redoButton, addButton),
+      periodNote, summaryHost, chartHost, announcement, listHost);
     el.append(h('div.page-wrap', sheet));
     function updateHistoryControls() {
       const busy = !!(pendingHistory || pendingSave || activeEditor);
@@ -315,7 +401,7 @@
       if (!alive || event.defaultPrevented || event.isComposing || event.altKey || !(event.ctrlKey || event.metaKey) || !['z', 'y'].includes(key)) return;
       if (activeEditor || pendingSave || pendingHistory || sheet.closest('[inert]') || document.querySelector('.modal-back, dialog[open]') || ui.menuOpen && ui.menuOpen()) return;
       const focus = document.activeElement;
-      const textEditing = target => target !== currencySelect && U.isEditable(target);
+      const textEditing = target => target !== currencySelect && target !== periodSelect && U.isEditable(target);
       if (textEditing(event.target) || textEditing(focus) || focus && focus !== document.body && !sheet.contains(focus)) return;
       event.preventDefault();
       return travelHistory(key === 'y' || event.shiftKey ? 1 : -1);
@@ -324,6 +410,25 @@
     monthInput.addEventListener('change', () => {
       if (!validMonth(monthInput.value)) { monthInput.value = month; announcement.textContent = 'Choose a month with a four-digit year.'; return; }
       month = monthInput.value; announcement.textContent = ''; render();
+    });
+    weekInput.addEventListener('change', () => {
+      try { periodRange({ type: 'weekly', date: weekInput.value }); }
+      catch (error) { weekInput.value = weekDate; announcement.textContent = error.message; return; }
+      weekDate = weekInput.value; announcement.textContent = ''; render();
+    });
+    yearInput.addEventListener('change', () => {
+      try { periodRange({ type: 'yearly', year: yearInput.value }); }
+      catch (error) { yearInput.value = year; announcement.textContent = error.message; return; }
+      year = yearInput.value; announcement.textContent = ''; render();
+    });
+    periodSelect.addEventListener('change', () => {
+      const next = periodSelect.value, previous = content().periodMode || 'monthly';
+      periodSelect.value = previous;
+      if (!own(periodNames, next) || next === previous) return;
+      if (activeEditor || pendingSave || pendingHistory) { ui.toast('Save or cancel the open editor first.'); return; }
+      if (next === 'project' && !content().projectPeriod) { editProject(); return; }
+      try { const fresh = content(); fresh.periodMode = next; saveContent(fresh); announcement.textContent = periodNames[next] + ' period selected.'; }
+      catch (error) { ui.toast(error.message, { error: true }); }
     });
     currencySelect.addEventListener('change', async () => {
       const previous = content().currency, next = currencySelect.value;
@@ -379,17 +484,41 @@
     }
     const field = (label, input, className) => h('label.budget-field' + (className ? '.' + className : ''), h('span', label), input);
 
+    function editProject() {
+      const initial = content(), previous = JSON.stringify(initial.projectPeriod), previousMode = initial.periodMode;
+      const dates = initial.expenses.map(row => row.date).sort();
+      const defaults = initial.projectPeriod || { start: dates[0] || month + '-01', end: dates[dates.length - 1] || periodRange({ type: 'monthly', month }).end };
+      const start = h('input.input', { type: 'date', required: true, value: defaults.start, autofocus: true });
+      const end = h('input.input', { type: 'date', required: true, value: defaults.end });
+      editor('Set project dates', [
+        h('div.budget-form-grid', field('Start date', start), field('End date', end)),
+        h('p.budget-help', 'Both dates are included. Use this page for one project and give it your project name. Expenses outside the range are kept and remain available in other periods.'),
+        h('p.budget-help', 'Each project date range has its own budget. Changing the dates keeps the previous budget saved for its original range.')
+      ], async () => {
+        const range = periodRange({ type: 'project', start: start.value, end: end.value });
+        const fresh = content();
+        if (JSON.stringify(fresh.projectPeriod) !== previous || fresh.periodMode !== previousMode) throw new Error('The project period changed. Cancel and reopen the editor.');
+        fresh.projectPeriod = Object.assign({}, fresh.projectPeriod, { start: range.start, end: range.end });
+        fresh.periodMode = 'project';
+        saveContent(fresh);
+        announcement.textContent = 'Project period saved. Existing expenses are kept.';
+      }, 'Save project dates');
+    }
+
     function editBudget() {
-      const targetMonth = month, initial = content(), previous = initial.budgets[targetMonth];
+      const initial = content(), target = periodRange(selection(initial));
+      const bucket = target.type === 'monthly' ? 'budgets' : 'periodBudgets';
+      const previous = (initial[bucket] || {})[target.key], name = periodNames[target.type];
       const input = h('input.input', { type: 'text', inputmode: 'decimal', value: previous === undefined ? '' : amountText(previous), placeholder: 'e.g. 1200.00', autofocus: true, maxlength: 12 });
-      editor('Budget for ' + monthLabel(targetMonth), [
-        field('Monthly budget (' + initial.currency + ')', input), h('p.budget-help', 'Leave this blank to remove the budget for this month. Expenses are kept.')
+      editor('Budget for ' + rangeLabel(target), [
+        field(name + ' budget (' + initial.currency + ')', input), h('p.budget-help', 'Leave this blank to remove the budget for this period. Expenses and budgets for other periods are kept.')
       ], async () => {
         const fresh = content();
-        if (fresh.currency !== initial.currency || fresh.budgets[targetMonth] !== previous) throw new Error('This monthly budget changed. Cancel and reopen the editor.');
+        if (fresh.currency !== initial.currency || (fresh[bucket] || {})[target.key] !== previous) throw new Error('This ' + name.toLowerCase() + ' budget changed. Cancel and reopen the editor.');
         const amount = input.value.trim() ? parseAmount(input.value) : null;
         if (input.value.trim() && amount === null) throw new Error('Enter a positive amount or zero, with up to two decimal places.');
-        if (amount === null) delete fresh.budgets[targetMonth]; else fresh.budgets[targetMonth] = amount;
+        if (amount === null) { if (fresh[bucket]) delete fresh[bucket][target.key]; }
+        else { if (!fresh[bucket]) fresh[bucket] = {}; fresh[bucket][target.key] = amount; }
         saveContent(fresh);
       }, 'Save budget');
     }
@@ -398,11 +527,28 @@
       const initial = content(), original = id ? initial.expenses.find(row => row.id === id) : null;
       if (id && !original) { ui.toast('That expense is no longer available.'); return; }
       const originalJSON = original && JSON.stringify(original);
-      const today = U.ymd(), date = h('input.input', { type: 'date', required: true, value: original ? original.date : today.slice(0, 7) === month ? today : month + '-01' });
+      const today = U.ymd(), range = periodRange(selection(initial));
+      const date = h('input.input', { type: 'date', required: true, value: original ? original.date : today >= range.start && today <= range.end ? today : range.start });
       const description = h('input.input', { type: 'text', required: true, maxlength: 400, autofocus: true, value: original ? original.description : '', placeholder: 'e.g. Lunch or electricity bill' });
       const amount = h('input.input', { type: 'text', inputmode: 'decimal', required: true, maxlength: 12, value: original ? amountText(original.amount) : '', placeholder: '0.00' });
       const listId = 'budget-categories-' + U.uid();
-      const category = h('input.input', { type: 'text', list: listId, maxlength: 120, value: original ? original.category : 'Other' });
+      // Use all saved expenses, including dates outside the current report.
+      // Suggestions never rename existing categories or change their chart totals.
+      const savedCategories = new Map();
+      const rememberCategory = value => {
+        const name = typeof value === 'string' ? value.trim() : '';
+        if (name && !savedCategories.has(name.toLowerCase())) savedCategories.set(name.toLowerCase(), name);
+      };
+      initial.expenses.forEach(row => rememberCategory(row.category));
+      const otherPages = typeof S.live === 'function' ? S.live('budget') : [];
+      otherPages.forEach(other => {
+        if (other.id === page.id || !S.isLive(other)) return;
+        const rows = other.content && other.content.expenses;
+        if (Array.isArray(rows)) rows.forEach(row => { if (row) rememberCategory(row.category); });
+      });
+      const categoryNames = Array.from(savedCategories.values()).sort((a, b) => a.localeCompare(b));
+      CATEGORIES.forEach(name => { if (!savedCategories.has(name.toLowerCase())) categoryNames.push(name); });
+      const category = h('input.input', { type: 'text', list: listId, maxlength: 120, value: original ? original.category : '', placeholder: 'Choose or type a category', autocomplete: 'off' });
       const notes = h('textarea.input', { rows: 2, maxlength: 10000, value: original ? original.note : '', placeholder: 'Optional details' });
       notes.value = original ? original.note : '';
       const upload = h('input.budget-upload', { type: 'file', multiple: true, accept: '.pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp', 'aria-label': 'Attach receipts or invoices' });
@@ -416,7 +562,8 @@
       const imported = new Map(); // retry a failed batch without creating duplicate blobs
       editor(original ? 'Edit expense' : 'Add expense', [
         field('Description', description), h('div.budget-form-grid', field('Date', date), field('Amount (' + initial.currency + ')', amount)),
-        field('Category', category), h('datalist#' + listId, CATEGORIES.map(name => h('option', { value: name }))),
+        field('Category', category), h('datalist#' + listId, categoryNames.map(name => h('option', { value: name }))),
+        h('p.budget-help', 'Choose a category used on your expense pages, or type a new one. Leave blank for Other.'),
         field('Notes', notes), h('div.budget-field', h('span', 'Receipts & invoices'), existing, upload,
           h('p.budget-help', 'PDF, PNG, JPG or WebP · up to 10 MB each. You can attach more than one file.'))
       ], async () => {
@@ -441,7 +588,8 @@
           category: category.value.trim() || 'Other', note: notes.value.trim(), attachments: Array.from(new Set(attachmentList)) });
         if (id) fresh.expenses = fresh.expenses.map(row => row.id === id ? record : row); else fresh.expenses.push(record);
         saveContent(normalizeContent(fresh));
-        announcement.textContent = 'Expense saved' + (record.date.slice(0, 7) !== month ? ' to ' + monthLabel(record.date.slice(0, 7)) : '') + '.';
+        const shown = periodRange(selection());
+        announcement.textContent = 'Expense saved' + (record.date < shown.start || record.date > shown.end ? ' outside the selected period (' + record.date + ')' : '') + '.';
       }, original ? 'Save changes' : 'Save expense');
     }
 
@@ -479,12 +627,19 @@
     function render() {
       if (!alive) return;
       updateHistoryControls();
-      const data = monthlySummary(content(), month), renderRevision = ++revision;
+      const data = periodSummary(content(), selection()), renderRevision = ++revision;
+      const range = data.period, mode = range.type, label = rangeLabel(range);
+      periodSelect.value = mode;
+      monthField.hidden = mode !== 'monthly'; weekField.hidden = mode !== 'weekly'; yearField.hidden = mode !== 'yearly'; projectDates.hidden = mode !== 'project';
+      monthInput.value = month; weekInput.value = weekDate; yearInput.value = year;
+      budgetButton.textContent = 'Set ' + periodNames[mode].toLowerCase() + ' budget';
+      periodNote.textContent = (mode === 'weekly' ? 'Monday–Sunday · ' : mode === 'project' ? 'Project dates · ' : '') + range.start + ' – ' + range.end +
+        ' · Both dates included. Each period has its own budget.';
       currencySelect.value = data.currency;
       U.clear(summaryHost); U.clear(chartHost); U.clear(listHost);
       const stat = (label, value, detail, negative) => h('section.budget-stat' + (negative ? '.budget-over' : ''), h('h2', label), h('strong', value), h('small', detail));
       summaryHost.append(stat('Spent', money(data.spent, data.currency), data.count + (data.count === 1 ? ' expense' : ' expenses')),
-        stat('Monthly budget', data.budget === null ? 'Not set' : money(data.budget, data.currency), monthLabel(month)),
+        stat(periodNames[mode] + ' budget', data.budget === null ? 'Not set' : money(data.budget, data.currency), label),
         stat(data.remaining !== null && data.remaining < 0 ? 'Over budget' : 'Remaining', data.remaining === null ? '—' : money(Math.abs(data.remaining), data.currency),
           data.remaining === null ? 'Set a budget to track what is left' : data.remaining < 0 ? 'Above your planned spending' : 'Available from your budget', data.remaining !== null && data.remaining < 0));
       const legend = h('ul.budget-legend');
@@ -496,12 +651,12 @@
           h('span.budget-category-total', money(category.amount, data.currency)), h('span.budget-percentage', category.percentage.toFixed(1) + '%')));
         return color + ' ' + start + '% ' + Math.min(100, position) + '%';
       });
-      const pie = h('div.budget-pie' + (data.spent ? '' : '.empty'), { role: 'img', 'aria-label': data.spent ? 'Expense pie chart. Exact category amounts and shares are listed alongside.' : 'No expenses for this month.',
+      const pie = h('div.budget-pie' + (data.spent ? '' : '.empty'), { role: 'img', 'aria-label': data.spent ? 'Expense pie chart. Exact category amounts and shares are listed alongside.' : 'No expenses for this period.',
         style: data.spent ? { background: 'conic-gradient(' + slices.join(', ') + ')' } : {} }, data.spent ? null : h('span', 'No expenses'));
       chartHost.append(h('section.budget-breakdown', h('h2', 'Spending by category'),
-        h('div.budget-chart-layout', pie, data.spent ? legend : h('p.budget-empty-chart', 'Add your first expense to see how this month’s spending is divided.'))));
-      listHost.append(h('div.budget-list-heading', h('h2', 'Expenses'), h('span', monthLabel(month))));
-      if (!data.count) { listHost.append(h('div.empty', 'A fresh month', h('small', 'Add an expense above. Receipts and invoices stay with each entry.'))); return; }
+        h('div.budget-chart-layout', pie, data.spent ? legend : h('p.budget-empty-chart', 'Add your first expense to see how spending in this period is divided.'))));
+      listHost.append(h('div.budget-list-heading', h('h2', 'Expenses'), h('span', label)));
+      if (!data.count) { listHost.append(h('div.empty', mode === 'monthly' ? 'A fresh month' : 'No expenses in this period', h('small', 'Add an expense above. Receipts and invoices stay with each entry.'))); return; }
       const body = h('tbody');
       data.expenses.forEach(row => body.append(h('tr',
         h('td.budget-date', h('time', { datetime: row.date }, dateLabel(row.date))),
@@ -510,7 +665,7 @@
         h('td.budget-receipts', row.attachments.length ? row.attachments.map(id => receiptButton(id, renderRevision)) : h('span.muted', '—')),
         h('td', h('div.budget-row-actions', h('button.btn.sm.quiet', { type: 'button', 'aria-label': 'Edit ' + row.description, onclick: () => editExpense(row.id) }, 'Edit'),
           h('button.ibtn.sm', { type: 'button', 'aria-label': 'Remove ' + row.description, onclick: () => removeExpense(row.id) }, ZN.icon('trash', 15)))))));
-      listHost.append(h('div.budget-table-scroll', h('table.budget-table', h('caption.budget-sr-only', 'Expenses for ' + monthLabel(month) + ', in ' + data.currency),
+      listHost.append(h('div.budget-table-scroll', h('table.budget-table', h('caption.budget-sr-only', 'Expenses for ' + label + ', in ' + data.currency),
         h('thead', h('tr', ['Date', 'Expense', 'Category', 'Amount', 'Receipts / invoices', 'Actions'].map(text => h('th', { scope: 'col' }, text)))), body)));
     }
     const offBlobs = S.on('blobs', () => { if (!activeEditor && S.get(page.id) === page && S.isLive(page)) render(); });
